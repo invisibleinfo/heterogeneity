@@ -1,6 +1,45 @@
-*.Rproj.user
-*.Rproj
+# macOS
+.DS_Store
+
+# R / RStudio
 .Rhistory
+.Rapp.history
 .RData
 .Ruserdata
-.Rproj.user
+.Rprofile
+.Rproj.user/
+
+# Environment files
+.Renviron
+
+# Dependencies / package management
+renv/library/
+renv/staging/
+packrat/lib/
+packrat/src/
+
+# Python / notebooks (if any)
+.ipynb_checkpoints/
+
+# Knitr / R Markdown build artifacts
+*_cache/
+cache/
+*.utf8.md
+*.knit.md
+*.nb.html
+*.tex
+*.log
+*.aux
+*.toc
+*.out
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+*.synctex.gz
+*-concordance.tex
+
+# Misc
+.vscode/
+.idea/
+paper/
