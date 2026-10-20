@@ -1,398 +1,176 @@
 # heterogeneity
 
-`heterogeneity` provides modern R tools for understanding heterogeneous media effects.
+Explore whether the effect of an independent variable (W) on a dependent variable (Y) is larger for some people than for others. One R call fits an honest causal forest (via [`grf`](https://grf-labs.github.io/grf/)); printing the result shows the average adjusted difference (the average treatment effect), how much the forest's predictions vary, which characteristics it used most, and who has smaller and larger predictions. `effect_by()` then checks groups of interest in the units of Y. A point-and-click app follows the same steps.
 
-## Overview
+The package is meant for researchers new to causal forests who want **exploratory, descriptive signals of heterogeneity**. You need:
 
-The `heterogeneity` package provides contemporary machine learning methods for identifying and characterizing heterogeneous treatment effects in media and communication research. Built on causal forest methodology ([Wager & Athey, 2018](https://doi.org/10.1080/01621459.2017.1319839)), this package enables researchers to move beyond average treatment effects and discover how media effects vary across individuals.
+- a **dependent variable (Y)**: numeric, either continuous (such as a test score) or binary coded 0/1 (a 0/1 Y gives differences in proportions);
+- an **independent variable (W)**: either binary, with any two values (such as treatment and control), giving adjusted **differences** between the two groups; or numeric with more values (such as hours of use), giving adjusted **slopes**, the change in Y per one-unit increase in W;
+- plausible **characteristics (X)** that might moderate the effect of W on Y (covariates).
 
-### Why heterogeneity?
-
-Traditional approaches to studying media effects focus on **average treatment effects (ATEs)** - a single number summarizing the average impact of media exposure. However, this average often conceals meaningful variation: some individuals may be strongly influenced by media content while others show minimal response.
-
-`heterogeneity` addresses three key limitations of traditional moderation analysis:
-
-1. The algorithm discovers which variables drive heterogeneity directly from the data
-2. Goes beyond simple linear interactions to model complex functional forms
-3. Generates predicted treatment effects for each person, not just group averages
+The average adjusted difference is what causal inference calls the average treatment effect, and its average slope the average partial effect. Whether either is a causal effect depends on the research design, not on the software: it is when W was randomly assigned, or when every common cause of W and Y is among the characteristics; otherwise it is an adjusted association.
 
 ## Installation
 
-Install the development version from GitHub:
-
 ```r
-# Install remotes if needed
-if (!requireNamespace("remotes", quietly = TRUE)) {
-  install.packages("remotes")
-}
-
-# Install heterogeneity
+install.packages("remotes")
 remotes::install_github("invisibleinfo/heterogeneity")
 ```
 
-## Core Workflow
+To install from a local copy of the repository instead, run `install.packages(c("grf", "ggplot2"))` and then `install.packages(".", repos = NULL, type = "source")` in its root folder. The app also needs `shiny`; Excel uploads need `readxl` and SPSS or Stata uploads `haven`. The GSS example is downloaded with [`gssr`](https://kjhealy.github.io/gssr/), which is installed from its own repository:
 
-The `heterogeneity` package implements a three-stage analytical workflow:
+```r
+install.packages(c("shiny", "readxl", "haven"))
+install.packages("gssr", repos = c("https://kjhealy.r-universe.dev", "https://cloud.r-project.org"))
+```
 
-### 1. **Test** for heterogeneity
-Formally assess whether treatment effects vary across individuals using the RATE (Rank-Average Treatment Effect) method.
+## Four steps
 
-### 2. **Estimate** individual-level effects  
-Calculate Conditional Average Treatment Effects (CATEs) for each person using causal forests.
+### 1. Choose variables
 
-### 3. **Identify** key moderators
-Discover which covariates explain the observed heterogeneity through variable importance scores.
-
-## Quick Start Example
+Use one row per observation. Choose a dependent variable (Y), an independent variable (W), and characteristics (X) that might make the effect of W larger or smaller. A simulated experiment:
 
 ```r
 library(heterogeneity)
-library(tidyverse)
-
-# Prepare your data
-# Y: outcome variable (numeric)
-# W: treatment indicator (binary: 0/1)
-# X: covariate matrix (data frame or matrix)
-
-# Step 1: Test if heterogeneity exists
-het_test <- test_heterogeneity(
-  Y = outcome,
-  W = treatment,
-  X = covariates,
-  weights = survey_weights  # optional
+set.seed(1)
+d <- data.frame(
+  age = runif(1000, 18, 80),
+  educ = sample(8:20, 1000, replace = TRUE),
+  programme = rbinom(1000, 1, 0.5)
 )
-
-# View AUTOC estimate (>0 indicates heterogeneity)
-print(paste("AUTOC:", round(het_test$autoc, 2), 
-            "+/-", round(1.96 * het_test$std_err, 2)))
-
-# Plot the targeting curve
-plot(het_test$rate)
-
-# Step 2: Estimate individual treatment effects
-cate_results <- estimate_cates(
-  Y = outcome,
-  W = treatment,
-  X = covariates,
-  ids = participant_ids,  # optional
-  weights = survey_weights,  # optional
-  num_trees = 2000
-)
-
-# View average treatment effect
-print(paste("ATE:", round(cate_results$ate, 2)))
-
-# Access individual-level estimates
-cate_df <- cate_results$cates
-head(cate_df)
-
-# Step 3: Identify which covariates drive heterogeneity
-moderators <- identify_moderators(
-  causal_forest = cate_results$causal_forest,
-  X = covariates,
-  top_n = 10  # show top 10 moderators
-)
-
-# View variable importance
-print(moderators$variable_importance)
+d$score <- 0.1 * d$educ + d$programme * (1 + (d$age > 50)) + rnorm(1000)
+d$age[1:50] <- NA
 ```
 
-## Main Functions
-
-### Core Analysis Functions
-
-#### `test_heterogeneity()`
-
-Tests whether treatment effects vary across individuals using the RATE method.
-
-**Arguments:**
-- `Y`: Outcome variable (numeric vector)
-- `W`: Treatment variable (binary: 0/1)
-- `X`: Covariate matrix (data frame or matrix)
-- `weights`: Optional survey weights (numeric vector)
-- `seed`: Random seed for reproducibility (default: 27011990)
-
-**Returns:**
-- `rate`: RATE object from grf package
-- `autoc`: AUTOC estimate (Area Under the Targeting Operator Characteristic)
-- `std_err`: Standard error of AUTOC
-- `ci_lower`, `ci_upper`: 95% confidence interval bounds
-- `train_forest`, `eval_forest`: Fitted causal forest objects
-
-**Interpretation:**
-- AUTOC > 0 with statistical significance indicates meaningful heterogeneity
-- The targeting curve lying above the horizontal axis suggests the model successfully ranks individuals by treatment effect magnitude
-
----
-
-#### `estimate_cates()`
-
-Estimates Conditional Average Treatment Effects (CATEs) for each individual using a causal forest.
-
-**Arguments:**
-- `Y`: Outcome variable (numeric vector)
-- `W`: Treatment variable (binary: 0/1)
-- `X`: Covariate matrix (data frame or matrix)
-- `ids`: Optional ID vector for observations
-- `weights`: Optional survey weights (numeric vector)
-- `num_trees`: Number of trees in the causal forest (default: 2000)
-- `seed`: Random seed for reproducibility (default: 27011990)
-
-**Returns:**
-- `causal_forest`: Fitted causal forest object
-- `cates`: Data frame with columns:
-  - `treatment_effect`: Individual-level treatment effect estimate
-  - `standard_error`: Standard error of the estimate
-  - `ci_lower`, `ci_upper`: 95% confidence interval bounds
-  - `quintile`: Effect quintile (1 = lowest, 5 = highest)
-- `ate`: Average treatment effect
-- `ate_se`: Standard error of ATE
-
----
-
-#### `identify_moderators()`
-
-Calculates variable importance scores to identify which covariates drive heterogeneity.
-
-**Arguments:**
-- `causal_forest`: Fitted causal forest object from `estimate_cates()`
-- `X`: Covariate matrix used in fitting the forest
-- `top_n`: Optional number of top variables to return (NULL = all)
-
-**Returns:**
-- `variable_importance`: Data frame with columns:
-  - `variable`: Variable name
-  - `importance`: Importance score (higher = more important)
-  - `rank`: Importance rank
-- `ranked_vars`: Numeric vector of ranked variable indices
-- `top_variables`: Character vector of top variable names
-
----
-
-### Visualization Functions
-
-#### `plot_treatment_effect_histogram()`
-
-Creates a histogram showing the distribution of individual treatment effects, colored by quintile.
-
-**Arguments:**
-- `df_cate`: Data frame with `treatment_effect` and `quintile` columns
-- `ate`: Optional ATE value to show as reference line
-
-**Returns:** ggplot2 object
-
----
-
-#### `plot_treatment_effect_violin()`
-
-Creates violin plots showing the distribution of treatment effects within each quintile.
-
-**Arguments:**
-- `df_cate`: Data frame with `treatment_effect` and `quintile` columns
-- `ate`: Optional ATE value to show as reference line
-
-**Returns:** ggplot2 object
-
----
-
-#### `plot_moderator_heatmap()`
-
-Creates a heatmap showing standardized mean values of top moderators across treatment effect quintiles.
-
-**Arguments:**
-- `df_cate`: Data frame with `quintile` column and moderator variables
-- `top_variables`: Character vector of variable names to include
-
-**Returns:** ggplot2 object
-
-**Interpretation:** 
-- Green cells indicate above-average values of a covariate in that quintile
-- Red cells indicate below-average values
-- Helps visualize which characteristics are associated with larger/smaller treatment effects
-
----
-
-### Utility Functions
-
-#### `highly_correlated()`
-
-Identifies pairs of variables with correlations above a threshold.
-
-**Arguments:**
-- `data`: Data frame containing numeric variables
-- `threshold`: Minimum absolute correlation to report (default: 0.7)
-
-**Returns:** Tibble with columns:
-- `x`, `y`: Variable names
-- `r`: Pearson correlation coefficient
-
-**Use case:** Pre-analysis check to identify potential collinearity issues before fitting models.
-
----
-
-## Extended Example: Analyzing Media Effects
-
-Here's a complete example analyzing how political conservatism affects support for a candidate:
+### 2. Run the forest
 
 ```r
-library(heterogeneity)
-library(tidyverse)
-
-# Assume we have survey data with:
-# - trump_rating: 0-100 rating of Donald Trump
-# - conservative: binary indicator (1 = conservative, 0 = not)
-# - Multiple demographic and attitudinal covariates
-
-# Pre-analysis: Check for multicollinearity
-highly_correlated(survey_data, threshold = 0.7)
-
-# Define variables
-Y <- survey_data$trump_rating
-W <- survey_data$conservative
-X <- survey_data %>% 
-  select(age, education, income, political_engagement, 
-         media_use, trust_media, # ... other covariates
-  )
-
-# STEP 1: Test for heterogeneity
-het_test <- test_heterogeneity(Y, W, X, 
-                                weights = survey_data$weights)
-
-# Check AUTOC
-autoc_estimate <- het_test$autoc
-autoc_ci <- 1.96 * het_test$std_err
-cat(sprintf("AUTOC: %.3f (95%% CI: %.3f to %.3f)\n",
-            autoc_estimate, 
-            autoc_estimate - autoc_ci,
-            autoc_estimate + autoc_ci))
-
-# Plot targeting curve
-plot(het_test$rate, 
-     main = "Targeting Operator Characteristic Curve")
-
-# If AUTOC > 0 and significant, proceed to estimation
-
-# STEP 2: Estimate individual-level effects
-cate_results <- estimate_cates(
-  Y, W, X,
-  ids = survey_data$id,
-  weights = survey_data$weights,
-  num_trees = 2000
+report <- explore_heterogeneity(
+  data = d, y = "score", w = "programme", x = c("age", "educ"),
+  W_hat = 0.5, effect_label = "Difference in score (points)"
 )
-
-# View ATE
-cat(sprintf("Average Treatment Effect: %.2f +/- %.2f\n",
-            cate_results$ate,
-            1.96 * cate_results$ate_se))
-
-# Merge CATEs back into main data
-survey_data <- survey_data %>%
-  left_join(cate_results$cates, by = c("id" = "id"))
-
-# Visualize distribution of effects
-plot_treatment_effect_histogram(survey_data, 
-                                 ate = cate_results$ate) +
-  labs(title = "Heterogeneity in Conservative Effect on Trump Support")
-
-plot_treatment_effect_violin(survey_data,
-                              ate = cate_results$ate) +
-  labs(title = "Treatment Effects by Quintile")
-
-# STEP 3: Identify key moderators
-moderators <- identify_moderators(
-  cate_results$causal_forest,
-  X,
-  top_n = 10
-)
-
-# Display top moderators
-print(moderators$variable_importance)
-
-# Visualize how moderators vary across quintiles
-plot_moderator_heatmap(survey_data, 
-                       moderators$top_variables) +
-  labs(title = "Characteristics of High vs. Low Effect Individuals")
-
-# VERIFICATION: Compare with traditional regression
-# Test top moderator using interaction term
-lm(trump_rating ~ conservative * political_engagement + 
-     age + education + income,
-   data = survey_data,
-   weights = weights) %>%
-  summary()
+report
 ```
 
-## Methodological Details
+Printing the report shows a summary (the average adjusted difference, or average treatment effect, also in standard deviations for a continuous Y; the smallest and largest predicted differences; the candidate moderators most used in tree splits; and notes on the data preparation) and three plots:
 
-### The Honesty Principle
+1. **How much do predicted differences vary?** A histogram of each observation's out-of-bag prediction, with the number of bins set by the Freedman–Diaconis rule. As in the heatmaps, bars are increasingly red further below 0 and increasingly teal further above it. The spread includes estimation noise, so it is not the true distribution of effects; the smallest and largest predictions carry the most noise.
+2. **Which candidate moderators did the forest use most?** All characteristics, ranked by how often and how early the forest split on each. Importance makes a characteristic a candidate moderator, not a proven one, and gives neither the size nor the direction of a difference.
+3. **Who has smaller and larger predictions?** For every characteristic, in order of importance (a text characteristic gets one row per category), the average z-score in up to five groups of observations sorted by their predictions. Every characteristic is standardized over all observations (mean 0, standard deviation 1), so negative cells are below the sample average and positive cells above it, on one scale for all characteristics.
 
-Causal forests implement the **honesty principle** to ensure valid statistical inference:
+`print(report, plots = FALSE)` shows the summary alone, and `plot(report, "distribution")`, `plot(report, "importance")` or `plot(report, "profiles")` draws one plot. With many characteristics, `top_n` limits the last two, for example `plot(report, "importance", top_n = 10)`.
 
-1. Each tree randomly splits data into two subsamples
-2. **Splitting sample**: Used to determine tree structure (which variables to split on)
-3. **Estimation sample**: Used to calculate treatment effects within each leaf
+`W_hat` is the known expected value of W: for two groups, the probability of being in the group coded 1. Supply it when it is known from an experiment; otherwise leave it out and the forest estimates it. By default, differences are the larger (or alphabetically later) value of W minus the other; `treated` chooses the value coded 1. The default seed (21042020) makes the fit reproducible.
 
-This separation prevents overfitting and ensures that confidence intervals and hypothesis tests are valid.
+**In standard deviations.** For a continuous Y, the summary also gives the average as a standardized effect size, which can be compared across outcomes measured in different units: the average adjusted difference divided by the pooled within-group standard deviation of Y before adjustment, or, for a numeric W, the change in Y (in standard deviations) per standard deviation of W. With weights, the standard deviations are weighted. It is left out for a 0/1 Y, whose differences in proportions are already on a natural scale. Everything else stays in the units of Y: `report$ate$standardized` holds the value and `report$ate$sd_y` the standard deviation used, so dividing by it converts any other result.
 
-### What is AUTOC?
+### 3. Compare groups
 
-The **Area Under the Targeting Operator Characteristic (AUTOC)** quantifies the degree of treatment effect heterogeneity:
+```r
+age <- effect_by(report, "age")         # adjusted difference in each age group, with counts
+age
+plot(age)
+plot(effect_by(report, "age", "educ"))  # two characteristics at once: a heatmap
+```
 
-- **AUTOC = 0**: No heterogeneity (all individuals have the same treatment effect)
-- **AUTOC > 0**: Positive heterogeneity (some individuals benefit more than others)
-- **AUTOC < 0**: Negative heterogeneity (some individuals are harmed while others benefit)
+This is the focused check: the adjusted difference within groups of a characteristic your research question names, or one the forest used often. Numeric characteristics are cut into quantile bins (five for one characteristic, three each for two). The table includes a "(Missing)" group; the plots leave missing values out.
 
-A statistically significant AUTOC indicates that the causal forest successfully identifies subgroups with different treatment effects.
+The overall and group averages are adjusted estimates built from grf's doubly robust scores. The plots in step 2 describe the forest's **predictions**. The two can differ: one summarizes groups of people, the other the fitted model. Groups also differ in other ways, so a pattern does not show what would happen if someone's age changed.
 
-### Variable Importance
+### 4. Export results
 
-Variable importance scores indicate how much each covariate contributes to explaining treatment effect heterogeneity:
+```r
+write.csv(effect_by(report, "age"), "age_groups.csv", row.names = FALSE)
+write.csv(report$moderators, "importance.csv", row.names = FALSE)
+write.csv(report$cates, "predictions.csv", row.names = FALSE)
+```
 
-- **Higher scores** = More important for distinguishing high-effect from low-effect individuals
-- **Lower scores** = Less relevant for explaining effect variation
+Report Y and W, the analysis sample, the average difference (in the units of Y and, for a continuous Y, in standard deviations), and the group estimates and counts relevant to your question, as exploratory results.
 
-These scores guide researchers toward the most important moderators without requiring prior specification.
+## A numeric independent variable
 
-## Interpretation Guidelines
+When W has more than two numeric values, the same steps give slopes:
 
-### When to use this package
+```r
+d$hours <- runif(1000, 0, 10)
+d$wellbeing <- d$hours * (0.2 + 0.3 * (d$educ > 14)) + rnorm(1000)
+slopes <- explore_heterogeneity(data = d, y = "wellbeing", w = "hours", x = c("age", "educ"))
+slopes                                 # average adjusted slope, range of predicted slopes, ...
+plot(effect_by(slopes, "educ"))        # change in wellbeing per extra hour, by years of education
+```
 
-✅ **Use `heterogeneity` when:**
-- You want to explore which factors moderate treatment effects
-- You have many potential moderators and don't want to pre-specify all interactions
-- You suspect nonlinear or complex moderation patterns
-- You want individual-level treatment effect estimates
-- You need a formal test for whether heterogeneity exists
+grf estimates a local linear slope for each profile of characteristics, the change in Y per one-unit increase in W, and averages them into the average partial effect. A group in `effect_by()` is estimated when W varies within it.
 
-❌ **Traditional methods may suffice when:**
-- You have strong theory about specific moderators
-- You only need to test a few pre-specified interactions
-- Your sample size is too small (< 100 observations)
-- Interpretability of exact functional form is critical
+## The GSS example
 
-### Verification and Triangulation
+```r
+gss <- load_gss2024()
+report <- explore_heterogeneity(
+  data = gss$data, y = "rating_trump", w = "conservative", x = gss$covariates, ids = "id",
+  labels = gss$labels, value_labels = gss$value_labels, effect_label = gss$effect_label
+)
+```
 
-We recommend using `heterogeneity` **alongside** traditional methods:
+`load_gss2024()` downloads the 2024 General Social Survey with `gssr` (nothing is stored in the package) and prepares the example: the rating of Donald Trump as the dependent variable (Y), conservative self-identification as the independent variable (W), and demographic, socioeconomic, religious, attitudinal and wellbeing characteristics. Each recode is defined by the meaning of the GSS category labels and checked against them, so a changed category in a later release stops the loading with a message naming the item, rather than miscoding it. `gss$codebook` describes every column, generated from the GSS labels. Because NORC revises its releases, rerun the analysis rather than copying numbers from earlier output.
 
-1. Use causal forests to discover important moderators
-2. Verify findings using traditional regression with interaction terms
-3. Create subgroup analyses to validate patterns
-4. Report both exploratory (causal forest) and confirmatory (regression) results
+## The app
 
-This triangulation strengthens the credibility of findings.
+```r
+heterogeneity::run_app()
+```
 
-## Dependencies
+Upload a CSV, TSV, Excel, SPSS (.sav) or Stata (.dta) file, or follow the **Try the GSS example** link, which downloads the example and fills in the tutorial's choices. A small expander lists what the file needs. The app finds the delimiter and text encoding of text files, recognises a missing header row, removes empty rows and columns, names unnamed columns, and uses the variable and value labels of SPSS and Stata files as readable names. Nothing is saved: the file is used only during your session (Shiny deletes its temporary copy when the session ends), and refreshing the page clears everything.
 
-The package builds on these R packages:
+The page names the four steps at the outset, and each step shows all of its output at once. In step 1, once a file is loaded, every field appears together: the dependent variable (Y), the independent variable (W: two values, or a number for slopes), the value coded 1 (when the two values are not 0 and 1), the characteristics (X), and optional settings for an ID column, weights, clusters, the number of trees and the random seed. A column chosen for one field disappears from the others. **Continue to step 2: Run the forest** fits the forest and shows the average effect with three plots; each later Continue button opens the next step: a group comparison (step 3, starting with the top candidate moderator), then a plain-language summary to copy and each row's prediction as a CSV file (step 4). Everything is explained with the numbers from your data. Technical terms and field labels are underlined; hovering over one shows a short explanation. To keep the page uncluttered, longer explanations (what the file needs, notes on the data, how to read each plot, the table of groups) sit in small expanders. A switch at the top changes between light and dark mode; it follows your system setting at first. Changing any input clears the results until you run the forest again. A link at the top of the page leads to this repository.
 
-- `grf` - Generalized Random Forests for causal inference
-- `tidyverse` - Data manipulation and visualization
+## Missing values and untidy data
 
+**Missing characteristics are always kept, never filled in.** `grf` splits on missingness directly. This handles the computation; it does not remove bias from data that are missing for systematic reasons. See the [grf guide](https://grf-labs.github.io/grf/articles/grf_guide.html).
+
+- Blank cells, infinite numbers and common missing-value text ("NA", "N/A", "NaN", "NULL", ".", "-") count as missing; text columns that hold only numbers are read as numbers; labels and other attributes (for example from SPSS or Stata files) are dropped, with codes kept as numbers.
+- Rows missing Y, W, or a supplied weight or cluster are removed. Original row numbers, or supplied IDs, identify the rows that remain.
+- Entirely missing and constant characteristics are left out.
+- Text and factor characteristics (up to 20 categories) become 0/1 indicators internally: one per category, or a single one for two categories. Trees need no reference category, and with its own indicator any category can be separated in a single split. Plots use the original categories, and importance is added back up to the original variable.
+- Numeric codes are treated as ordered numbers. Convert nominal categories, such as region codes, to text or factors first.
+- `report$notes` records every change and `report$missingness` counts the missing values of each characteristic.
+
+`explore_heterogeneity(Y, W, X)` also accepts numeric vectors and a covariate matrix directly.
+
+## Weights, clusters and counts
+
+With the data-frame interface, `ids`, `weights` and `clusters` name columns; with the vector interface they are vectors. Weights apply to the forest and to every displayed average. Clusters identify observations sampled together, such as students in a school, and the forest samples them as groups. Without weights, the results describe the analysis sample.
+
+Prediction groups contain about equal numbers of rows, with tied predictions kept together. For each group, `effect_by()` returns the adjusted `estimate`, the row count `n`, the positive-weight count `n_positive`, for a binary W the counts in each of its groups (`n_control`, `n_treated`), and a `status`. A group is estimated only when it has at least 30 positive-weight observations and includes both groups of W (for a numeric W: more than one value); this is a practical display rule, not a guarantee of a stable estimate. Fitting has no minimum sample size, but the report notes when a group of W (or, for a numeric W, the whole sample) has fewer than 30 rows, because estimates are then very noisy; a forest cannot be grown from only a handful of rows.
+
+## Tutorial
+
+The [tutorial](tutorial/quickstart.md) follows the four steps with the GSS example. It describes adjusted associations and makes no causal claim. For more background see the [grf guide](https://grf-labs.github.io/grf/articles/grf_guide.html) and [Stanford's tutorial on heterogeneous treatment effects](https://bookdown.org/stanfordgsbsilab/ml-ci-tutorial/hte-i-binary-treatment.html).
+
+## Development
+
+The package itself needs only `grf` and `ggplot2` (plus base R); the app, the GSS example and the documents use the suggested packages.
+
+| Folder | Contents |
+| --- | --- |
+| `R/` | Package code, including the GSS example's recodes (`R/gss.R`) |
+| `man/` | Help pages, generated from `R/` by roxygen2 |
+| `inst/app/` | The Shiny app |
+| `tests/` | Package, example and app tests |
+| `tutorial/` | Tutorial source, rendered Markdown and figures |
+| `tools/` | Script that re-renders the tutorial |
+
+Run the tests with `devtools::test()`. After editing the code or the tutorial, rebuild the rendered tutorial (this needs `knitr`, `rmarkdown`, `gssr`, an internet connection and Pandoc):
+
+```sh
+Rscript tools/render_resources.R
+```
+
+The script installs the current source into a temporary library, so the tutorial always matches the code and the current GSS release.
 
 ## Support
 
-For questions, bug reports, or feature requests, please [open an issue](https://github.com/invisibleinfo/heterogeneity/issues) on GitHub.
+For questions, bug reports or feature requests, please [open an issue](https://github.com/invisibleinfo/heterogeneity/issues).
 
----
+## License
 
-**Note:** This package is currently under development.
+GNU Affero General Public License, version 3 or later (see [LICENSE](LICENSE)).

@@ -1,0 +1,127 @@
+# Internal helpers shared by the report, the plots and the app.
+
+# Column names used inside ggplot2 aesthetics.
+utils::globalVariables(c("cate_estimate", "weight", "group", "importance", "label", "z",
+                         "value_label", "g1", "g2", "estimate", "x_label", "x"))
+
+check_integer <- function(x, name, lower = 1L, upper = .Machine$integer.max) {
+  if (!is.numeric(x) || length(x) != 1L || !is.finite(x) ||
+      x != floor(x) || x < lower || x > upper) {
+    stop(name, " must be a whole number between ", lower, " and ", upper, ".", call. = FALSE)
+  }
+}
+
+# "a", "a or b", "a, b or c" (or joined with "and").
+and_or <- function(x, word = "or") {
+  if (length(x) <= 1L) return(paste(x))
+  paste(paste(x[-length(x)], collapse = ", "), word, x[length(x)])
+}
+
+# Weighted mean over positive weights; NA if any of those values is not finite.
+point_average <- function(values, weights) {
+  keep <- is.finite(weights) & weights > 0
+  if (!any(keep) || any(!is.finite(values[keep]))) return(NA_real_)
+  stats::weighted.mean(values[keep], weights[keep])
+}
+
+# Weighted standard deviation over positive weights, around the mean of each
+# group (one group by default). The factor n / (n - groups) makes equal
+# weights give the usual formulas: sd() for one group, the pooled
+# within-group SD for two.
+spread <- function(values, weights, groups = rep(1L, length(values))) {
+  keep <- is.finite(values) & weights > 0
+  values <- values[keep]; weights <- weights[keep]; groups <- groups[keep]
+  n <- length(values); k <- length(unique(groups))
+  if (n <= k) return(NA_real_)
+  means <- stats::ave(values * weights, groups, FUN = sum) / stats::ave(weights, groups, FUN = sum)
+  sqrt(sum(weights * (values - means)^2) / sum(weights) * n / (n - k))
+}
+
+# The average effect in standard deviations of Y, using its spread before
+# adjustment: pooled within the two groups of a binary W, or, for a numeric W,
+# the change in Y (in SDs) per SD of W. Left out for a two-valued Y, whose
+# differences in proportions are already on a natural scale.
+standardize <- function(estimate, Y, W, weights, binary) {
+  none <- list(standardized = NA_real_, sd_y = NA_real_, sd_w = NA_real_)
+  if (!is.finite(estimate) || length(unique(Y)) <= 2L) return(none)
+  sd_y <- spread(Y, weights, if (binary) W else rep(1L, length(Y)))
+  sd_w <- if (binary) NA_real_ else spread(W, weights)
+  value <- if (binary) estimate / sd_y else estimate * sd_w / sd_y
+  if (!is.finite(value)) return(none)
+  list(standardized = value, sd_y = sd_y, sd_w = sd_w)
+}
+
+# Weighted mean of the observed (non-missing) values only.
+observed_average <- function(values, weights) {
+  keep <- is.finite(values) & weights > 0
+  point_average(values[keep], weights[keep])
+}
+
+# Up to five groups of about equal size. Midranks keep tied predictions
+# together without merging everything into one group.
+prediction_groups <- function(values) {
+  groups <- pmin(5L, floor((rank(values, ties.method = "average") - 1) * 5 / length(values)) + 1L)
+  match(groups, sort(unique(groups)))
+}
+
+# Pairs of numeric columns with |r| at or above the threshold (observed pairs).
+highly_correlated <- function(data, threshold = 0.9) {
+  d <- as.data.frame(data); d <- d[vapply(d, is.numeric, logical(1))]
+  d <- d[vapply(d, function(v) length(unique(v[is.finite(v)])) > 1L, logical(1))]
+  empty <- data.frame(x = character(), y = character(), r = numeric())
+  if (ncol(d) < 2L) return(empty)
+  d[] <- lapply(d, function(v) { v[!is.finite(v)] <- NA_real_; v })
+  correlation <- suppressWarnings(stats::cor(d, use = "pairwise.complete.obs"))
+  positions <- which(upper.tri(correlation) & is.finite(correlation) & abs(correlation) >= threshold, arr.ind = TRUE)
+  if (!nrow(positions)) return(empty)
+  out <- data.frame(x = colnames(correlation)[positions[, 1]], y = colnames(correlation)[positions[, 2]], r = correlation[positions])
+  out[order(-abs(out$r)), , drop = FALSE]
+}
+
+# Readable names for covariates and for their category codes.
+var_label <- function(report, v) unname(report$labels[v])
+level_labels <- function(report, v, levels) {
+  labels <- report$settings$value_labels[[v]]
+  result <- as.character(levels)
+  matched <- match(result, names(labels)); found <- !is.na(matched)
+  result[found] <- unname(labels[matched[found]])
+  make.unique(result)
+}
+
+# For each covariate (or category indicator) and prediction group: the mean,
+# and the average z-score, z = (value - overall mean) / overall SD. Both
+# ignore missing values; with weights, means and SDs are weighted.
+profile_summary <- function(report, variables) {
+  map <- report$feature_map
+  map <- map[map$variable %in% variables, , drop = FALSE]
+  map <- map[order(match(map$variable, variables)), , drop = FALSE]
+  weights <- report$weights
+  rows <- lapply(seq_len(nrow(map)), function(j) {
+    v <- report$X[[map$feature[j]]]
+    mu <- observed_average(v, weights)
+    spread <- sqrt(observed_average((v - mu)^2, weights))
+    label <- var_label(report, map$variable[j])
+    if (!is.na(map$level[j])) label <- paste0(label, ": ", map$level[j])
+    do.call(rbind, lapply(report$quintiles$quintile, function(k) {
+      idx <- which(report$cates$quintile == k)
+      avg <- observed_average(v[idx], weights[idx])
+      data.frame(feature = map$feature[j], label = label, quintile = k, mean = avg,
+        z = if (is.finite(spread) && spread > 0) (avg - mu) / spread else if (is.finite(avg)) 0 else NA_real_)
+    }))
+  })
+  do.call(rbind, rows)
+}
+
+# Words for the estimates: differences between the two groups of a binary W,
+# or slopes for a numeric W. The average is the average treatment effect
+# (for a numeric W, grf's average partial effect).
+effect_words <- function(report) {
+  s <- report$settings
+  if (identical(s$w_type, "continuous")) {
+    list(noun = "slope", plural = "slopes", Average = "Average adjusted slope (average partial effect)",
+         effect = paste("change per one-unit increase in", s$comparison))
+  } else {
+    list(noun = "difference", plural = "differences", Average = "Average adjusted difference (average treatment effect)",
+         effect = paste(s$w_labels[2], "minus", s$w_labels[1]))
+  }
+}

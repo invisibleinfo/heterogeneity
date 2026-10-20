@@ -1,0 +1,42 @@
+Package: heterogeneity
+Title: Explore Heterogeneous Effects with Causal Forests
+Version: 0.2.0
+Authors@R: 
+    person("Saurabh", "Khanna", email = "saurabh.khanna2701@gmail.com", role = c("aut", "cre"))
+Description: Explores whether the effect of an independent variable on a
+    dependent variable is larger for some people than for others. One call
+    fits an honest causal forest via 'grf' and reports the average effect
+    (also in standard deviations for a continuous outcome), the spread of the
+    forest's predictions, the characteristics it used most, and profiles of
+    who has smaller and larger predictions; a second function estimates the
+    effect within groups of chosen characteristics. The independent variable
+    can have two values (differences) or be numeric (slopes). Missing
+    characteristics use native forest handling without imputation. A 'shiny'
+    app provides the same descriptive workflow for uploaded data or a General
+    Social Survey example, which is downloaded with 'gssr' rather than stored.
+License: AGPL (>= 3)
+URL: https://github.com/invisibleinfo/heterogeneity
+BugReports: https://github.com/invisibleinfo/heterogeneity/issues
+Depends:
+    R (>= 4.1.0)
+Imports:
+    ggplot2 (>= 3.4.0),
+    grDevices,
+    grf (>= 2.4.0),
+    stats,
+    utils
+Suggests:
+    bslib (>= 0.6.0),
+    gssr,
+    haven,
+    knitr,
+    readxl,
+    rmarkdown,
+    shiny,
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3
+Additional_repositories: https://kjhealy.r-universe.dev
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3

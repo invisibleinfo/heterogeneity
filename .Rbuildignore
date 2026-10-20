@@ -1,0 +1,13 @@
+^paper$
+^tutorial$
+^tools$
+^LICENSE$
+^\.github$
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.DS_Store$
+^.*\.Rcheck$
+^.*\.tar\.gz$
+^Rplots\.pdf$
+^Dockerfile$
+^\.dockerignore$

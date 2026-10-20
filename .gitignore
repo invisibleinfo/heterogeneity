@@ -38,6 +38,11 @@ cache/
 *.run.xml
 *.synctex.gz
 *-concordance.tex
+Rplots.pdf
+
+# Package checks
+*.Rcheck/
+*.tar.gz
 
 # Misc
 .vscode/
