@@ -19,10 +19,10 @@
 \code{x}, invisibly.
 }
 \description{
-Shows the summary (the average adjusted difference or slope, which is the
-average treatment or partial effect, also in standard deviations for a
-continuous outcome, the range of predictions, the candidate
+Shows the summary (the average treatment effect, or for a numeric \code{W} the
+average partial effect, also in standard deviations for a continuous
+outcome; the range of estimated treatment effects; the candidate
 moderators most used in tree splits, and notes on the data) and, by default,
-the three plots of \code{\link[=plot.heterogeneity_report]{plot.heterogeneity_report()}}: the spread of
-predictions, importance and profiles.
+the three plots of \code{\link[=plot.heterogeneity_report]{plot.heterogeneity_report()}}: the distribution of
+estimated treatment effects, importance, and treatment effect quintiles.
 }

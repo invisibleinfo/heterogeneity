@@ -2,7 +2,7 @@
 % Please edit documentation in R/plots.R
 \name{plot.heterogeneity_groups}
 \alias{plot.heterogeneity_groups}
-\title{Plot adjusted differences (or slopes) within groups}
+\title{Plot average treatment effects within groups}
 \usage{
 \method{plot}{heterogeneity_groups}(x, ...)
 }

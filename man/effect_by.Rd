@@ -2,7 +2,7 @@
 % Please edit documentation in R/effect_by.R
 \name{effect_by}
 \alias{effect_by}
-\title{Adjusted differences (or slopes) within groups}
+\title{Average treatment effects within groups}
 \usage{
 effect_by(
   report,
@@ -39,10 +39,11 @@ rows in each), \code{estimate} and \code{status} (why an estimate is missing, or
 Groups are formed from one or two of the report's covariates. Numeric
 covariates with many values are cut into quantile bins (ties can reduce
 the number of bins); missing values form their own "(Missing)" group in the
-table. Each estimate averages grf's doubly robust scores within the group,
-using any supplied weights, without refitting the forest: a difference
-between the two groups of \code{W}, or, for a numeric \code{W}, a slope (change in
-\code{Y} per one-unit increase in \code{W}). Groups
+table. Each estimate is the average treatment effect within the group: an
+average of grf's doubly robust scores, using any supplied weights, without
+refitting the forest. For a binary \code{W} it is a difference between the two
+groups of \code{W}; for a numeric \code{W}, a slope (change in \code{Y} per one-unit
+increase in \code{W}). Groups
 contain different people, so a pattern does not show what would happen if
 the covariate changed.
 }

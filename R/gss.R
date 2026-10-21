@@ -136,7 +136,7 @@ clean_gss2024 <- function(raw) {
     source = vapply(names(d), function(v) switch(v, id = "id", svy_weight = "wtssnrps_as", psu_cluster = "vstrat x vpsu",
       items[[v]][[1]]), ""), row.names = NULL)
   list(data = d, covariates = covariates, labels = labels[names(d)], value_labels = value_labels,
-       codebook = codebook, effect_label = "Difference in Trump rating (points)")
+       codebook = codebook, effect_label = "Treatment effect on Trump rating (points)")
 }
 
 # Numbers without haven classes; negative codes and codes labelled as missing become NA.

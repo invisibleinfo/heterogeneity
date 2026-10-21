@@ -57,8 +57,8 @@ observed_average <- function(values, weights) {
   point_average(values[keep], weights[keep])
 }
 
-# Up to five groups of about equal size. Midranks keep tied predictions
-# together without merging everything into one group.
+# Treatment effect quintiles: up to five groups of about equal size. Midranks
+# keep tied estimates together without merging everything into one group.
 prediction_groups <- function(values) {
   groups <- pmin(5L, floor((rank(values, ties.method = "average") - 1) * 5 / length(values)) + 1L)
   match(groups, sort(unique(groups)))
@@ -88,7 +88,7 @@ level_labels <- function(report, v, levels) {
   make.unique(result)
 }
 
-# For each covariate (or category indicator) and prediction group: the mean,
+# For each covariate (or category indicator) and treatment effect quintile: the mean,
 # and the average z-score, z = (value - overall mean) / overall SD. Both
 # ignore missing values; with weights, means and SDs are weighted.
 profile_summary <- function(report, variables) {
@@ -112,16 +112,18 @@ profile_summary <- function(report, variables) {
   do.call(rbind, rows)
 }
 
-# Words for the estimates: differences between the two groups of a binary W,
-# or slopes for a numeric W. The average is the average treatment effect
-# (for a numeric W, grf's average partial effect).
+# Words for the estimates, which are treatment effects: for a binary W the
+# difference between its two groups, for a numeric W the change in Y per unit
+# of W (grf's partial effect, a slope).
 effect_words <- function(report) {
   s <- report$settings
   if (identical(s$w_type, "continuous")) {
-    list(noun = "slope", plural = "slopes", Average = "Average adjusted slope (average partial effect)",
+    per <- paste("per unit of", s$comparison)
+    list(plural = paste("treatment effects", per), numeric = TRUE,
+         Average = paste("Average treatment effect", per, "(average partial effect)"),
          effect = paste("change per one-unit increase in", s$comparison))
   } else {
-    list(noun = "difference", plural = "differences", Average = "Average adjusted difference (average treatment effect)",
+    list(plural = "treatment effects", numeric = FALSE, Average = "Average treatment effect",
          effect = paste(s$w_labels[2], "minus", s$w_labels[1]))
   }
 }

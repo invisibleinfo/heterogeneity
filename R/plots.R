@@ -1,8 +1,9 @@
 #' Plot a heterogeneity report
 #'
 #' Three views of the fitted forest:
-#' * `"distribution"` (default): histogram of the out-of-bag predicted
-#'   differences (or slopes), coloured like the heatmaps: increasingly red
+#' * `"distribution"` (default): histogram of the estimated treatment
+#'   effects conditional on covariates (out-of-bag estimates of the
+#'   conditional average treatment effect), coloured like the heatmaps: increasingly red
 #'   further below 0 and increasingly teal further above it, with equal
 #'   distances from 0 equally deep; 0 is always a bin edge. The number of
 #'   bins follows the Freedman-Diaconis rule. The spread includes estimation
@@ -10,15 +11,17 @@
 #' * `"importance"`: all covariates, as candidate moderators, ranked by how
 #'   much the forest split on them, weighted toward early splits; category
 #'   indicators are added back to their covariate. Importance gives neither
-#'   the size nor the direction of a difference, and related covariates share
-#'   it.
+#'   the size nor the direction of a treatment effect, and related covariates
+#'   share it.
 #' * `"profiles"`: for every covariate in order of importance (one row per
-#'   category of a text covariate), the average z-score in each prediction
-#'   group: up to five groups of about equal size, from the smallest
-#'   predictions to the largest. Each covariate is standardized over all
-#'   observations (mean 0, standard deviation 1), so negative cells are below
-#'   the sample average and positive cells above it, on a scale shared by all
-#'   covariates. Missing values are ignored.
+#'   category of a text covariate, as a share), its average in each treatment
+#'   effect quintile, labelled from the bottom 20% of estimated treatment
+#'   effects to the top 20% (with many tied estimates, fewer groups, labelled
+#'   by their actual shares). Row labels give each covariate's observed range.
+#'   Colours compare each average with the covariate's overall average, teal
+#'   above and red below, measured in standard deviations of that covariate,
+#'   so covariates in different units share one colour scale. Missing values
+#'   are ignored.
 #'
 #' Supplied weights apply to bar heights and means. For estimates within
 #' groups of a chosen covariate, use [effect_by()] and plot its result.
@@ -51,7 +54,7 @@ plot.heterogeneity_report <- function(x, type = c("distribution", "importance", 
     profiles = plot_profiles(x, top_n %||% all, variables))
 }
 
-#' Plot adjusted differences (or slopes) within groups
+#' Plot average treatment effects within groups
 #'
 #' One covariate gives a dot plot of the group estimates; the axis shows each
 #' group's row count. Two covariates give a heatmap coloured around the overall
@@ -83,9 +86,9 @@ plot.heterogeneity_groups <- function(x, ...) {
     ggplot2::geom_text(data = shown, ggplot2::aes(y = estimate, label = sprintf("%.1f", estimate)), vjust = -1.1, size = 3.3) +
     ggplot2::scale_x_discrete(drop = FALSE) +
     ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(.1, .2))) +
-    ggplot2::labs(x = info$titles[1], y = info$effect_label, title = paste("Adjusted", info$words$plural, "across groups"),
+    ggplot2::labs(x = info$titles[1], y = info$effect_label, title = "Average treatment effects across groups",
                   caption = paste0("Each point is a different group of people. Missing values are left out. Groups with\ntoo few observations",
-                                   if (info$words$noun == "slope") ", or no spread in W," else ", or only one group of W,",
+                                   if (isTRUE(info$words$numeric)) ", or no spread in W," else ", or only one group of W,",
                                    " are not estimated.")) +
     plot_theme()
   if (!nrow(shown)) p <- p + ggplot2::expand_limits(y = 0)
@@ -96,7 +99,7 @@ plot.heterogeneity_groups <- function(x, ...) {
 
 # Each bar is coloured by its position: deeper red further below 0, deeper
 # teal further above it. With 0 as a bin edge, no bar spans both sides; bar
-# centres just beyond the predictions take the end colours.
+# centres just beyond the estimates take the end colours.
 plot_distribution <- function(report) {
   d <- report$cates; d$weight <- report$weights
   ggplot2::ggplot(d, ggplot2::aes(x = cate_estimate, weight = weight)) +
@@ -105,8 +108,8 @@ plot_distribution <- function(report) {
     ggplot2::scale_fill_gradient2(low = colours$low, mid = colours$neutral, high = colours$high, midpoint = 0,
                                   limits = colour_limits(d$cate_estimate), oob = squish, guide = "none") +
     ggplot2::labs(x = report$settings$effect_label, y = if (report$settings$weighted) "Sum of weights" else "Observations",
-                  title = paste("How much do predicted", effect_words(report)$plural, "vary?"),
-                  caption = "Colours deepen with distance from 0: red below, teal above. Predictions describe profiles;\ntheir spread includes estimation noise.") +
+                  title = "Distribution of estimated treatment effects, conditional on covariates",
+                  caption = "Colours deepen with distance from 0: red below, teal above. Each estimate describes people\nwith similar characteristics, not one person, and includes estimation noise.") +
     plot_theme()
 }
 
@@ -116,9 +119,8 @@ plot_importance <- function(report, top_n) {
   d$label <- factor(labels, levels = rev(labels))
   ggplot2::ggplot(d, ggplot2::aes(x = importance, y = label)) +
     ggplot2::geom_col(fill = "#286b70", width = .65) +
-    ggplot2::labs(x = "Importance in tree splits", y = NULL, title = "Which candidate moderators did the forest use most?",
-                  caption = paste0("Importance does not give the size or direction of a ", effect_words(report)$noun,
-                                   ".\nRelated characteristics can share importance.")) +
+    ggplot2::labs(x = "Importance in tree splits", y = NULL, title = "Candidate moderators of the treatment effect, ranked by importance",
+                  caption = "Importance does not give the size or direction of a treatment effect.\nRelated characteristics can share importance.") +
     plot_theme()
 }
 
@@ -127,17 +129,39 @@ plot_profiles <- function(report, top_n, variables) {
   if (!is.character(variables) || !length(variables) || anyNA(variables) ||
       any(!variables %in% names(report$covariates))) stop("Choose covariates present in the report.")
   d <- profile_summary(report, unique(variables))
-  map <- unique(d[c("feature", "label")]); map$label <- make.unique(wrap_lines(map$label))
+  # Each row is labelled with the characteristic's observed range.
+  d$range <- vapply(d$feature, function(f) {
+    v <- report$X[[f]]
+    paste(range_label(min(v, na.rm = TRUE)), "to", range_label(max(v, na.rm = TRUE)))
+  }, "")
+  d$name <- d$label
+  map <- unique(d[c("feature", "label", "range")])
+  # Long names wrap; the range stays whole at the end of the last line.
+  map$label <- make.unique(vapply(seq_len(nrow(map)), function(k) {
+    lines <- strwrap(map$label[k], 32)
+    lines[length(lines)] <- paste0(lines[length(lines)], " (", map$range[k], ")")
+    paste(lines, collapse = "\n")
+  }, ""))
   d$label <- factor(map$label[match(d$feature, map$feature)], levels = rev(map$label))
-  d$group <- factor(d$quintile)
-  d$value_label <- ifelse(is.finite(d$z), sprintf("%+.2f", d$z), "")
+  columns <- quintile_labels(report$cates$quintile)
+  d$group <- factor(columns[as.character(d$quintile)], levels = columns)
+  d$value_label <- ifelse(is.finite(d$mean), number_label(d$mean), "")
+  # Colours: distance from the characteristic's overall average, in its
+  # standard deviations, so rows in different units share one scale.
+  limits <- colour_limits(d$z)
   ggplot2::ggplot(d, ggplot2::aes(x = group, y = label, fill = z)) +
-    ggplot2::geom_tile(colour = "white") + ggplot2::geom_text(ggplot2::aes(label = value_label), size = 3.5) +
+    ggplot2::geom_tile(colour = "white", linewidth = 1.2) + ggplot2::geom_text(ggplot2::aes(label = value_label), size = 3.5) +
+    ggplot2::scale_x_discrete(position = "top") +
     ggplot2::scale_fill_gradient2(low = colours$low, mid = colours$mid, high = colours$high, midpoint = 0,
-      limits = colour_limits(d$z), na.value = "grey90", name = "Average\nz-score") +
-    ggplot2::labs(x = "Prediction group: smaller to larger", y = NULL, title = "Who has smaller and larger predictions?",
-                  caption = "Average z-score: 0 is the sample average, -1 one standard deviation below it.\nMissing values are ignored. Sorting on predictions can itself create separation.") +
-    plot_theme()
+      limits = limits, breaks = c(limits[1] * .8, 0, limits[2] * .8), labels = c("Below\naverage", "Average", "Above\naverage"),
+      na.value = "grey90", name = NULL) +
+    ggplot2::labs(x = if (length(columns) == 5L) "Estimated treatment effect quintiles" else "Groups by estimated treatment effect",
+                  y = NULL, title = "Characteristics across treatment effect quintiles",
+                  caption = paste0("Each cell is the characteristic's average in that quintile (a share for 0/1 rows). Colours compare it\n",
+                                   "with the overall average: teal above, red below, deeper the further away. Missing values are\n",
+                                   "ignored. Sorting on estimated effects can itself create separation.")) +
+    plot_theme() +
+    ggplot2::theme(legend.position = "bottom", legend.key.width = ggplot2::unit(1.6, "cm"))
 }
 
 plot_heatmap <- function(d, info) {
@@ -151,8 +175,8 @@ plot_heatmap <- function(d, info) {
       limits = colour_limits(d$estimate, midpoint), na.value = "grey85", name = info$effect_label) +
     ggplot2::scale_x_discrete(labels = function(v) wrap_lines(v, 12)) +
     ggplot2::scale_y_discrete(labels = function(v) wrap_lines(v, 22)) +
-    ggplot2::labs(x = info$titles[1], y = info$titles[2], title = paste("Adjusted", info$words$plural, "across groups"),
-                  caption = sprintf("Each cell is a different group of people; colours are centred on the overall average (%.1f).\nGrey cells are not estimated. Missing values are left out.", midpoint)) +
+    ggplot2::labs(x = info$titles[1], y = info$titles[2], title = "Average treatment effects across groups",
+                  caption = sprintf("Each cell is a different group of people; colours are centred on the average treatment effect (%.1f).\nGrey cells are not estimated. Missing values are left out.", midpoint)) +
     plot_theme() +
     ggplot2::theme(legend.position = "bottom", legend.key.width = ggplot2::unit(1.6, "cm"))
 }
@@ -165,6 +189,25 @@ plot_heatmap <- function(d, info) {
 # white page.
 colours <- list(low = "#bf7770", mid = "#f7f7f7", high = "#72a9ac", neutral = "#e4e4e7")
 squish <- function(x, range) pmin(pmax(x, range[1]), range[2])
+# Numbers in cells and ranges: two decimals below 10, one below 100, none above.
+number_label <- function(x) {
+  digits <- ifelse(abs(x) >= 100, 0, ifelse(abs(x) >= 10, 1, 2))
+  vapply(seq_along(x), function(k) formatC(x[k], format = "f", digits = digits[k], big.mark = ","), "")
+}
+range_label <- function(x) if (x == round(x)) formatC(x, format = "d", big.mark = ",") else number_label(x)
+# Column labels for the treatment effect quintiles, from each group's share of
+# rows: "Bottom 20%", "20-40%", ..., "Top 20%". Tied estimates can merge
+# groups, and the labels then give the actual shares.
+quintile_labels <- function(groups) {
+  k <- sort(unique(groups))
+  if (length(k) == 1L) return(stats::setNames("All", k))
+  upper <- round(100 * cumsum(as.numeric(table(factor(groups, levels = k)))) / length(groups))
+  lower <- c(0, utils::head(upper, -1))
+  labels <- sprintf("%d-%d%%", lower, upper)
+  labels[1] <- sprintf("Bottom %d%%", upper[1])
+  labels[length(k)] <- sprintf("Top %d%%", 100 - lower[length(k)])
+  stats::setNames(labels, k)
+}
 wrap_lines <- function(x, width = 32) vapply(x, function(s) paste(strwrap(s, width), collapse = "\n"), character(1), USE.NAMES = FALSE)
 # Titles and captions start at the left edge of the whole plot, so long axis
 # labels cannot push a caption past the right edge.

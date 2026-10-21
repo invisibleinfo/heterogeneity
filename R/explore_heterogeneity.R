@@ -1,13 +1,16 @@
 #' Explore heterogeneity with one causal forest
 #'
 #' Supply a data frame and column names, or numeric vectors `Y`, `W` and
-#' covariates `X`. The dependent variable `Y` (the outcome) can be continuous
-#' or 0/1 (estimates are then differences in proportions). The independent
-#' variable `W` (the treatment or comparison) can have two values, giving
-#' adjusted **differences** between the two groups, or be a numeric scale,
-#' giving adjusted **slopes**: the change in `Y` per one-unit increase in `W`.
-#' Their average is the average treatment effect (for a numeric `W`, grf's
-#' average partial effect). For a continuous `Y` it is also given in standard
+#' covariates `X`. The dependent variable `Y` (the outcome) and the
+#' independent variable `W` (the treatment or comparison) can each be binary,
+#' with any two values (coded 0/1; `y_one` and `treated` choose the value
+#' coded 1), or continuous, a numeric scale. For a binary `Y`, effects are
+#' differences in the share coded 1. A binary `W` gives treatment effects as
+#' **differences** between its two groups; a continuous `W` gives them as
+#' **slopes**: the change in `Y` per one-unit increase in `W`. The forest estimates a treatment effect for
+#' each profile of covariates (a conditional average treatment effect); their
+#' average is the average treatment effect (for a numeric `W`, grf's average
+#' partial effect). For a continuous `Y` it is also given in standard
 #' deviations: divided by the pooled within-group standard deviation of `Y`
 #' before adjustment, or, for a numeric `W`, as the change in `Y` (in SDs) per
 #' SD of `W`; weighted when weights are supplied. Every other result stays in
@@ -20,19 +23,21 @@
 #' in the other group.
 #'
 #' Printing the report (type `report`) shows a summary and three plots: the
-#' spread of predictions, candidate moderators ranked by importance, and
-#' profiles (see [plot.heterogeneity_report()]). [effect_by()] then checks
-#' groups of a chosen covariate.
+#' distribution of estimated treatment effects, candidate moderators ranked by
+#' importance, and characteristics across treatment effect quintiles (see
+#' [plot.heterogeneity_report()]). [effect_by()] then estimates the average
+#' treatment effect within groups of a chosen covariate.
 #'
-#' Overall and group averages use grf's doubly robust scores; the spread and
-#' profiles describe out-of-bag predictions, which include estimation noise.
+#' Overall and group averages use grf's doubly robust scores; the
+#' distribution and quintiles describe out-of-bag estimates of the conditional
+#' treatment effects, which include estimation noise.
 #' All results are exploratory. A causal interpretation requires a suitable
 #' research design, overlap and covariates unaffected by `W`; otherwise
 #' describe adjusted associations.
 #'
-#' @param Y,W Numeric dependent variable (continuous or 0/1) and independent
-#'   variable (two values, or a numeric scale); no missing values. Omit these
-#'   when supplying `data`.
+#' @param Y,W Numeric dependent and independent variables, each binary (two
+#'   values) or continuous; no missing values. Omit these when supplying
+#'   `data`, which also accepts text values for a binary variable.
 #' @param X Numeric data frame or matrix of covariates; NA is allowed.
 #'   Omit when supplying `data`. Linear dependence is allowed.
 #' @param ids,weights,clusters Optional identifiers, nonnegative weights and
@@ -50,28 +55,31 @@
 #' @param labels Named character vector of readable covariate names.
 #' @param value_labels Named list of named character vectors mapping category
 #'   codes to readable labels.
-#' @param effect_label Axis label with the units of `y`. By default "Difference
-#'   in <y>" for a binary `w` and "Change in <y> per unit of <w>" for a numeric
-#'   `w`.
+#' @param effect_label Axis label with the units of `y`. By default "Treatment
+#'   effect on <y>" for a binary `w` and "Treatment effect on <y> per unit of
+#'   <w>" for a numeric `w`.
 #' @param data A data frame. The easiest interface uses `data`, `y`, `w`, `x`.
 #' @param y,w Names of the dependent and independent variable columns in
 #'   `data`.
 #' @param x Character vector of covariate names in `data`.
 #' @param treated For a two-valued `w`, the value coded 1 and compared against
 #'   the other; by default the larger or alphabetically later.
+#' @param y_one For a two-valued `y`, the value coded 1, so that effects are
+#'   differences in its share; by default the larger or alphabetically later.
 #' @return A `heterogeneity_report`: a list with `ate` (the average treatment
 #'   effect or average partial effect: `estimate` in the units of `Y`,
 #'   `status`, and, for a continuous `Y`, `standardized`, the estimate in
 #'   standard deviations, with the SDs used, `sd_y` and `sd_w`; these are `NA`
 #'   otherwise),
-#'   `cates` (one row per observation: id, cate_estimate, quintile),
+#'   `cates` (one row per observation: id, its estimated conditional treatment
+#'   effect `cate_estimate`, and its treatment effect `quintile`),
 #'   `moderators` (variable, label, importance, rank), `quintiles` (n and
-#'   mean_prediction per prediction group), `prediction_range` (smallest and
-#'   largest prediction), `missingness`, preparation `notes`, covariate
+#'   mean_prediction per quintile), `prediction_range` (smallest and largest
+#'   estimated treatment effect), `missingness`, preparation `notes`, covariate
 #'   `labels`, and the data, scores, `forest` and `settings` (including
-#'   `w_type`, `"binary"` or `"continuous"`) used by the plots. Prediction
-#'   groups have about equal row counts; tied predictions stay together, so
-#'   fewer than five groups are possible. Weights apply to all means.
+#'   `w_type`, `"binary"` or `"continuous"`) used by the plots. Quintiles have
+#'   about equal row counts; tied estimates stay together, so fewer than five
+#'   groups are possible. Weights apply to all means.
 #' @references [grf guide](https://grf-labs.github.io/grf/articles/grf_guide.html).
 #' @seealso [plot.heterogeneity_report()], [effect_by()], [run_app()]
 #' @examples
@@ -94,7 +102,7 @@ explore_heterogeneity <- function(Y = NULL, W = NULL, X = NULL, ids = NULL,
                                   W_hat = NULL, weights = NULL, clusters = NULL,
                                   num_trees = 2000, tune = FALSE, top_k = 5, seed = 21042020,
                                   labels = NULL, value_labels = NULL, effect_label = NULL,
-                                  data = NULL, y = NULL, w = NULL, x = NULL, treated = NULL) {
+                                  data = NULL, y = NULL, w = NULL, x = NULL, treated = NULL, y_one = NULL) {
   check_integer(num_trees, "num_trees", 100L)
   check_integer(top_k, "top_k")
   check_integer(seed, "seed", 0L)
@@ -115,7 +123,7 @@ explore_heterogeneity <- function(Y = NULL, W = NULL, X = NULL, ids = NULL,
   if (!is.null(data)) {
     if (!is.null(Y) || !is.null(W) || !is.null(X)) stop("Use either data with column names, or Y, W and X.")
     n_original <- nrow(data)
-    inp <- prepare_inputs(data, y, w, x, ids, weights, clusters, treated)
+    inp <- prepare_inputs(data, y, w, x, ids, weights, clusters, treated, y_one)
     outcome_name <- y; comparison_name <- w
   } else {
     if (!is.null(y) || !is.null(w) || !is.null(x)) stop("Column names y, w and x require data.")
@@ -146,7 +154,7 @@ explore_heterogeneity <- function(Y = NULL, W = NULL, X = NULL, ids = NULL,
     if (!is.null(clusters)) d[[reserved[5]]] <- clusters
     inp <- prepare_inputs(d, reserved[1], reserved[2], names(X),
       ids = if (!is.null(ids)) reserved[3], weights = if (!is.null(weights)) reserved[4],
-      clusters = if (!is.null(clusters)) reserved[5], treated = treated)
+      clusters = if (!is.null(clusters)) reserved[5], treated = treated, y_one = y_one)
     outcome_name <- "Y"; comparison_name <- "W"
   }
   binary <- inp$w_type == "binary"
@@ -158,16 +166,22 @@ explore_heterogeneity <- function(Y = NULL, W = NULL, X = NULL, ids = NULL,
     }
     if (length(W_hat) > 1L) W_hat <- W_hat[inp$row_index]
   }
-  if (is.null(effect_label)) effect_label <- if (binary) paste("Difference in", outcome_name) else
-    paste("Change in", outcome_name, "per unit of", comparison_name)
+  # Category names from value labels, for display.
+  relabel <- function(codes, name) {
+    if (is.null(codes)) return(NULL)
+    known <- value_labels[[name]]
+    found <- codes %in% names(known)
+    codes[found] <- unname(known[codes[found]])
+    codes
+  }
+  y_labels <- relabel(inp$y_labels, outcome_name)
+  if (is.null(effect_label)) {
+    target <- if (inp$y_type == "binary") paste0("the share with ", outcome_name, " = ", y_labels[2]) else outcome_name
+    effect_label <- paste0("Treatment effect on ", target, if (!binary) paste(" per unit of", comparison_name))
+  }
   positive <- if (is.null(inp$weights)) rep(TRUE, inp$n) else inp$weights > 0
   if (!is.null(inp$clusters) && length(unique(inp$clusters[positive])) < 2L) stop("At least two clusters with positive weight are needed.")
-  w_labels <- inp$w_labels
-  if (binary) {
-    comparison_labels <- value_labels[[comparison_name]]
-    found <- w_labels %in% names(comparison_labels)
-    w_labels[found] <- unname(comparison_labels[w_labels[found]])
-  }
+  w_labels <- relabel(inp$w_labels, comparison_name)
 
   had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
   if (had_seed) old_seed <- get(".Random.seed", envir = .GlobalEnv)
@@ -186,7 +200,7 @@ explore_heterogeneity <- function(Y = NULL, W = NULL, X = NULL, ids = NULL,
   averaging_weights <- if (is.null(inp$weights)) rep(1, inp$n) else inp$weights
   average <- point_average(scores, averaging_weights)
   ate <- c(list(estimate = average, status = if (is.finite(average)) "ok" else
-    "Adjusted average unavailable: some positive-weight rows have nonfinite scores; check group overlap."),
+    "Average treatment effect unavailable: some positive-weight rows have nonfinite scores; check group overlap."),
     standardize(average, inp$Y, inp$W, averaging_weights, binary))
   quintile <- prediction_groups(tau)
   cates <- data.frame(id = inp$ids, cate_estimate = tau, quintile = quintile)
@@ -222,18 +236,18 @@ explore_heterogeneity <- function(Y = NULL, W = NULL, X = NULL, ids = NULL,
       num_trees = forest[["_num_trees"]], tune = tune, top_k = top_k, seed = seed,
       W_hat = W_hat, weighted = !is.null(inp$weights), clustered = !is.null(inp$clusters),
       labels = labels, value_labels = value_labels, effect_label = effect_label,
-      outcome = outcome_name, comparison = comparison_name, w_type = inp$w_type,
-      w_labels = w_labels)), class = "heterogeneity_report")
+      outcome = outcome_name, comparison = comparison_name, y_type = inp$y_type, w_type = inp$w_type,
+      y_labels = y_labels, w_labels = w_labels)), class = "heterogeneity_report")
 }
 
 #' Print an exploratory report
 #'
-#' Shows the summary (the average adjusted difference or slope, which is the
-#' average treatment or partial effect, also in standard deviations for a
-#' continuous outcome, the range of predictions, the candidate
+#' Shows the summary (the average treatment effect, or for a numeric `W` the
+#' average partial effect, also in standard deviations for a continuous
+#' outcome; the range of estimated treatment effects; the candidate
 #' moderators most used in tree splits, and notes on the data) and, by default,
-#' the three plots of [plot.heterogeneity_report()]: the spread of
-#' predictions, importance and profiles.
+#' the three plots of [plot.heterogeneity_report()]: the distribution of
+#' estimated treatment effects, importance, and treatment effect quintiles.
 #' @param x A report from [explore_heterogeneity()].
 #' @param digits Decimal places for estimates.
 #' @param plots Draw the three plots after the summary (default `TRUE`).
@@ -262,7 +276,7 @@ print.heterogeneity_report <- function(x, digits = 2, plots = TRUE, ...) {
     else sprintf("In standard deviations: %s (SD of %s within the two groups: %s)", fmt(std), s$outcome, fmt(x$ate$sd_y)),
     exdent = 4)
   }
-  say(sprintf("Predicted %s range from %s to %s", words$plural, fmt(x$prediction_range[1]), fmt(x$prediction_range[2])))
+  say(sprintf("Estimated %s range from %s to %s", words$plural, fmt(x$prediction_range[1]), fmt(x$prediction_range[2])))
   say(if (x$settings$weighted) "Means and prediction summaries use supplied weights." else
     "Results describe the analysis sample without weighting.", exdent = 4)
   cat("\nCandidate moderators (most used in tree splits):\n")
@@ -274,7 +288,7 @@ print.heterogeneity_report <- function(x, digits = 2, plots = TRUE, ...) {
     for (note in x$notes) say(paste("-", note), exdent = 4)
   }
   cat("\n")
-  say("Check groups of interest with effect_by(). Predictions describe profiles and include noise; causal interpretation depends on the research design.", indent = 0)
+  say("Check groups of interest with effect_by(). Estimated treatment effects describe covariate profiles and include noise; a causal interpretation depends on the research design.", indent = 0)
   if (isTRUE(plots)) for (type in c("distribution", "importance", "profiles")) print(plot(x, type))
   invisible(x)
 }

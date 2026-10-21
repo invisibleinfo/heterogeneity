@@ -1,12 +1,13 @@
-#' Adjusted differences (or slopes) within groups
+#' Average treatment effects within groups
 #'
 #' Groups are formed from one or two of the report's covariates. Numeric
 #' covariates with many values are cut into quantile bins (ties can reduce
 #' the number of bins); missing values form their own "(Missing)" group in the
-#' table. Each estimate averages grf's doubly robust scores within the group,
-#' using any supplied weights, without refitting the forest: a difference
-#' between the two groups of `W`, or, for a numeric `W`, a slope (change in
-#' `Y` per one-unit increase in `W`). Groups
+#' table. Each estimate is the average treatment effect within the group: an
+#' average of grf's doubly robust scores, using any supplied weights, without
+#' refitting the forest. For a binary `W` it is a difference between the two
+#' groups of `W`; for a numeric `W`, a slope (change in `Y` per one-unit
+#' increase in `W`). Groups
 #' contain different people, so a pattern does not show what would happen if
 #' the covariate changed.
 #'

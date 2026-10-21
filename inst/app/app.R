@@ -133,7 +133,6 @@ distinct <- function(v) {
 
 fmt <- function(x, d = 2) ifelse(is.finite(x), sub("^-", "\u2212", formatC(x, digits = d, format = "f", big.mark = ",")), "unavailable")
 fmt_n <- function(x) formatC(x, format = "d", big.mark = ",")
-fmt_z <- function(x) sub("^-", "\u2212", sprintf("%+.2f", x))
 count_of <- function(k, word) paste(fmt_n(k), if (k == 1) word else paste0(word, "s"))
 code_tag <- function(x) as.character(tags$code(x))
 more_less <- function(x, more = "larger", less = "smaller") if (x >= 0) more else less
@@ -143,28 +142,29 @@ one_line <- function(x) gsub("\\s*\n\\s*", " ", x)
 # ---- Plain-language explanations shown on hover -------------------------------
 
 terms <- c(
-  dependent = "The variable you want to explain (Y), such as a test score. It must be numeric: continuous, or binary coded 0/1.",
-  independent = "The variable whose effect on Y you want to study (W): two groups, such as treated and untreated, or a number, such as hours of use, which gives slopes.",
-  characteristics = "Background information about each person (X), such as age or education, that might moderate the effect of W on Y. Text columns become 0/1 indicators, and missing values are kept, not filled in.",
-  moderate = "A characteristic moderates an effect when the effect is larger or smaller depending on its value: a programme might, for example, help younger people more than older people.",
-  heterogeneity = "Differences in the effect of W on Y from one kind of person to another. The effect is heterogeneous when it is larger for some people than for others.",
-  causal_forest = "A machine-learning method that grows many decision trees to find people for whom the effect of W on Y is larger or smaller. It builds on random forests.",
-  ate = "The effect of W on Y averaged over everyone: the gap in Y between the two groups of W among people with similar characteristics. It is a causal effect only if W was randomly assigned, or every common cause of W and Y is among the characteristics; otherwise it is an adjusted association.",
-  ape = "The effect of a numeric W averaged over everyone: how much Y changes per one-unit increase in W among people with similar characteristics. It is a causal effect only if W was randomly assigned, or every common cause of W and Y is among the characteristics; otherwise it is an adjusted association.",
+  dependent = "The variable you want to explain (Y): binary, with any two values (such as voted (1) and did not vote (0)), or continuous (such as a test score).",
+  independent = "The variable whose effect on Y you want to study (W): binary, with any two values (such as treated (1) and untreated (0)), or continuous (such as hours of use).",
+  characteristics = "Background information about each person (X), such as age or education, that might moderate the treatment effect of W on Y. Text columns become 0/1 indicators.",
+  moderate = "A characteristic moderates the treatment effect when the effect is larger or smaller depending on its value: a programme might, for example, help younger people more than older people.",
+  treatment_effect = "How much Y changes with W for people with similar characteristics: the difference between the two groups of a binary W, or the change per one-unit increase in a continuous W. It is a causal effect if W was randomly assigned, or every common cause of W and Y is among the characteristics X.",
+  heterogeneity = "Differences in the treatment effect of W on Y from one kind of person to another: the effect is heterogeneous when it is larger for some people than for others.",
+  causal_forest = "A machine-learning method that grows many decision trees to find people for whom the treatment effect of W on Y is larger or smaller. It builds on random forests.",
+  ate = "The effect of W on Y averaged over everyone: the gap in Y between the two groups of W among people with similar characteristics. It is a causal effect only if W was randomly assigned, or every common cause of W and Y is among the characteristics X.",
+  ape = "The effect of a numeric W averaged over everyone: how much Y changes per one-unit increase in W among people with similar characteristics. It is a causal effect only if W was randomly assigned, or every common cause of W and Y is among the characteristics X.",
   sd_units = "The effect divided by how much Y varies (its standard deviation within the two groups of W, before any adjustment), so that effects on outcomes measured in different units can be compared. For a numeric W, it is the change in Y, in standard deviations, for a one-standard-deviation increase in W.",
-  predicted = "The forest's estimate of the effect for people with a given combination of characteristics (a conditional average treatment effect). It is an average for similar people, not one person's own effect.",
+  cate = "The forest's estimate of the treatment effect for people with a given combination of characteristics: a conditional average treatment effect (CATE). It is an average for similar people, not one person's own effect.",
   honest = "Each tree uses one half of its data to choose its splits and the other half to estimate effects, which guards against mistaking noise for a pattern.",
-  doubly_robust = "A way of averaging that combines the forest's predictions with the observed values of Y, so the averages stay accurate even if one of its two underlying models is off.",
-  moderator = "A characteristic along which the effect of W may change. Frequent use in the forest's splits makes it a candidate, not a proven moderator.",
-  importance = "How often, and how early, the forest's trees split on a characteristic. It shows what the forest relied on, not whether the effect rises or falls.",
-  z_score = "A value expressed in standard deviations from the average: 0 is the average, +1 one standard deviation above it, -1 one below.",
-  prediction_group = "Up to five groups of about equal size that sort the observations from the smallest predicted effect to the largest.",
+  doubly_robust = "A way of averaging that combines the forest's estimates with the observed values of Y, so the averages stay accurate even if one of its two underlying models is off.",
+  moderator = "A characteristic along which the effect of W may change. The forest can split on a potential moderator to find people for whom the effect is larger or smaller.",
+  importance = "How often, and how early, the forest's trees split on a characteristic. It shows what the forest relied on to find people with larger or smaller effects.",
+  quintile = "Five groups of about equal size that sort the observations from the smallest estimated treatment effect (bottom 20%) to the largest (top 20%).",
   quantile_bins = "Groups of about equal size, formed by cutting a numeric characteristic at its quantiles.",
-  noise = "Random error from estimating with a limited sample. It makes predictions spread more widely than the true effects do.",
+  noise = "Random error from estimating with a limited sample. It can make estimated treatment effects spread more widely than the true effects do.",
   association = "Unless W was randomly assigned, a difference between groups may reflect other causes, so it is an association rather than a causal effect.",
-  missing = "Missing characteristics are kept: the forest can split on whether a value is missing, so nothing is filled in.",
-  treated = "Differences are this group minus the other.",
-  ids = "A column that identifies each row, such as a respondent number. It is kept in the downloaded predictions, so you can merge them back into your data.",
+  missing = "Missing characteristics are handled by the forest. The forest can split on whether a value is missing, so nothing is filled in.",
+  treated = "Treatment effects are this group minus the other.",
+  y_one = "Effects are differences in the share of this value.",
+  ids = "A column that identifies each row, such as a respondent number. It is kept in the downloaded file of estimated treatment effects, so you can merge them back into your data.",
   weights = "Survey weights make a sample represent a population: people with larger weights count more in the forest and in every average.",
   clusters = "Groups of related observations, such as students in the same school or people in the same household. The forest then samples whole clusters.",
   trees = "A decision tree asks a series of yes/no questions about the characteristics (such as: is age over 50?) to sort people into small groups. More trees give steadier results but take longer.",
@@ -183,8 +183,11 @@ fold <- function(summary, ..., open = FALSE) {
   tags$details(class = "fold", open = if (open) NA, tags$summary(summary), div(class = "fold-body", ...))
 }
 
-# The repository, and GitHub's mark for the link to it.
+# The repository and its tutorial, and GitHub's mark for the link to it.
 repo <- "https://github.com/invisibleinfo/heterogeneity"
+tutorial_url <- paste0(repo, "/blob/main/tutorial/quickstart.md")
+# An introduction to conditional average treatment effects (Stanford tutorial).
+cate_url <- "https://bookdown.org/stanfordgsbsilab/ml-ci-tutorial/hte-i-binary-treatment.html"
 github_mark <- '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>'
 # A link that works as a Shiny action button, without stray spaces.
 action_link <- function(id, text) tags$a(id = id, href = "#", class = "action-button", text)
@@ -320,12 +323,7 @@ css <- "
 js <- "
 Shiny.addCustomMessageHandler('scroll_to', function(id) {
   setTimeout(function() { var el = document.getElementById(id); if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'}); }, 200);
-});
-function copyReport(btn) {
-  var items = document.querySelectorAll('#report-text li');
-  navigator.clipboard.writeText(Array.from(items).map(function(li) { return '- ' + li.innerText; }).join('\\n'));
-  btn.innerText = 'Copied'; setTimeout(function() { btn.innerText = 'Copy text'; }, 1500);
-}"
+});"
 
 section <- function(n, title, ...) {
   div(class = "sec", id = paste0("step", n), div(class = "sec-num", n), div(tags$h2(title), ...))
@@ -346,31 +344,31 @@ ui <- page(
             tags$link(rel = "stylesheet", href = fonts),
             tags$style(HTML(css)), tags$script(HTML(js))),
   div(class = "wrap",
-    div(class = "eyebrow", span("heterogeneity"), span(class = "dot"), span("R package and app"),
+    div(class = "eyebrow", span("heterogeneity"), span(class = "dot"), span("R package and application"),
         tags$a(class = "gh", href = repo, target = "_blank", rel = "noopener", HTML(github_mark), "GitHub"),
         input_dark_mode(id = "mode", mode = "light")),
     h1(class = "title", "Exploring heterogeneity with causal forests"),
     p(class = "lead", HTML(paste0(
       "Upload a dataset, choose a ", term("dependent", "dependent variable"), " (Y), an ",
-      term("independent", "independent variable"), " (W), and the characteristics (X) that might ",
-      term("moderate", "moderate"), " the effect of W on Y. A ", term("causal_forest", "causal forest"),
-      " explores these patterns of ", term("heterogeneity", "heterogeneity"),
-      "; the results are explained one step at a time below."))),
+      term("independent", "independent variable"), " (W), and relevant ", term("characteristics", "characteristics"),
+      " (X) that might ", term("moderate", "moderate"), " the ", term("treatment_effect", "treatment effect"),
+      " of W on Y. The application then leverages a ", term("causal_forest", "causal forest"), " to explore patterns of ",
+      term("heterogeneity", "heterogeneity"), " in treatment effects through a four-step workflow."))),
     tags$ol(class = "flow", lapply(seq_along(steps), function(k) tags$li(span(class = "n", k), steps[k]))),
     section(1, "Choose variables",
       fileInput("file", "Data file", accept = c(".csv", ".tsv", ".txt", ".xlsx", ".xls", ".sav", ".dta"),
                 placeholder = "No file selected"),
-      help(HTML(paste0("No data at hand? ", action_link("example", "Try the GSS example"),
-                       ". Nothing is saved: refreshing the page clears everything."))),
+      help(HTML(paste0("Without data of your own, you can ", action_link("example", "load the 2024 General Social Survey example"),
+                       ". Uploaded files are used only during your session and are not stored; refreshing the page deletes them."))),
       uiOutput("example_error"),
       fold("What your file needs",
         tags$ul(
           tags$li("One row per person (or unit), with column names in the first row: CSV, TSV, Excel, SPSS (.sav) or Stata (.dta)."),
-          tags$li("A dependent variable (Y): numeric, either continuous (such as a test score) or binary coded 0/1 (such as voted or not)."),
-          tags$li("An independent variable (W): either binary, with any two values (such as treated and untreated), or numeric with more values (such as hours of use, which gives slopes)."),
+          tags$li("A dependent variable (Y): binary, with any two values (such as voted or did not vote), or continuous (such as a test score)."),
+          tags$li("An independent variable (W): binary, with any two values (such as treated or untreated), or continuous (such as hours of use)."),
           tags$li("Characteristics (X): numeric columns, or text columns with up to 20 categories."),
-          tags$li("Rows missing Y or W are left out; missing characteristics are kept and handled by the forest."),
-          tags$li("Small samples work, but their estimates are very noisy.")
+          tags$li("Rows missing Y or W are not included in the analysis; missingness in X is handled by the causal forest."),
+          tags$li("The estimates can be noisier for smaller samples.")
         )),
       uiOutput("data_note"),
       uiOutput("fields")
@@ -423,16 +421,27 @@ server <- function(input, output, session) {
     shown[is.na(shown)] <- vars[is.na(shown)]
     stats::setNames(vars, ifelse(shown == vars, vars, paste0(shown, " (", vars, ")")))
   }
-  w_values <- reactive({ req(input$w, input$w %in% names(data())); distinct(data()[[input$w]]) })
-  w_needs_coding <- reactive(length(w_values()) == 2L && !identical(as.character(w_values()), c("0", "1")))
+  # Y and W are coded alike: two values that are not 0 and 1 get a choice of the value coded 1.
+  values_of <- function(v) { req(v, v %in% names(data())); distinct(data()[[v]]) }
+  needs_coding <- function(vals) length(vals) == 2L && !identical(as.character(vals), c("0", "1"))
+  y_values <- reactive(values_of(input$y)); w_values <- reactive(values_of(input$w))
+  y_needs_coding <- reactive(needs_coding(y_values())); w_needs_coding <- reactive(needs_coding(w_values()))
+  # The two values with readable names, and a radio button to choose the one coded 1.
+  coding_choice <- function(id, key, v, vals) {
+    vals <- as.character(vals); shown <- vals
+    codes <- source_data()$value_labels[[v]]
+    if (length(codes)) shown[vals %in% names(codes)] <- unname(codes[vals[vals %in% names(codes)]])
+    radioButtons(id, label(key, paste("Value of", v, "coded 1")), choices = stats::setNames(vals, shown), selected = vals[2], inline = TRUE)
+  }
 
   # ---- Step 1: once data are loaded, every field is shown together ---------
 
   output$data_note <- renderUI({
     src <- source_data(); d <- src$data
-    if (example()) return(p(class = "muted", sprintf(
-      "The GSS example: %s respondents to the 2024 General Social Survey, with the tutorial's choices filled in.",
-      fmt_n(nrow(d)))))
+    if (example()) return(p(class = "muted", HTML(sprintf(
+      "The GSS example: %s respondents to the 2024 General Social Survey. The %s uses %s as Y, %s as W, and all other columns except %s, %s and %s as X.",
+      fmt_n(nrow(d)), as.character(tags$a(href = tutorial_url, target = "_blank", rel = "noopener", "tutorial")),
+      code_tag("rating_trump"), code_tag("conservative"), code_tag("id"), code_tag("svy_weight"), code_tag("psu_cluster")))))
     tagList(
       p(class = "muted", sprintf("Read %s rows and %d columns (%d numeric, %d text with 2 to 20 categories).",
                                  fmt_n(nrow(d)), ncol(d), length(num_cols()), length(text_cols()))),
@@ -441,7 +450,7 @@ server <- function(input, output, session) {
 
   # The columns each field offers. Y, W and X exclude one another, so each
   # list is updated when Y or W changes.
-  y_pool <- function(w) setdiff(num_cols(), w)
+  y_pool <- function(w) setdiff(union(bin_cols(), num_cols()), w)
   w_pool <- function(y) setdiff(union(bin_cols(), num_cols()), y)
   x_pool <- function(y, w) setdiff(c(num_cols(), text_cols()), c(y, w))
 
@@ -449,18 +458,17 @@ server <- function(input, output, session) {
   output$fields <- renderUI({
     req(tryCatch(data(), error = function(e) NULL))  # a file that cannot be read is reported once, above
     ex <- example()
-    y0 <- if (ex) "rating_trump"; w0 <- if (ex) "conservative"
     none <- c("None" = "")
     tagList(
-      if (length(num_cols()))
-        selectizeInput("y", label("dependent", "Dependent variable (Y)"), choices = c("", choices_for(y_pool(w0))),
-                       selected = y0 %||% "", options = list(placeholder = "Choose a column"))
-      else p(class = "muted", "No numeric columns were found, so none can be the dependent variable (Y)."),
-      selectizeInput("w", label("independent", "Independent variable (W)"), choices = c("", choices_for(w_pool(y0))),
-                     selected = w0 %||% "", options = list(placeholder = "Choose a column")),
+      if (length(y_pool(NULL)))
+        selectizeInput("y", label("dependent", "Dependent variable (Y)"), choices = c("", choices_for(y_pool(NULL))),
+                       options = list(placeholder = "Choose a column"))
+      else p(class = "muted", "No column has two values or numbers, so none can be the dependent variable (Y)."),
+      uiOutput("pick_y_one"),
+      selectizeInput("w", label("independent", "Independent variable (W)"), choices = c("", choices_for(w_pool(NULL))),
+                     options = list(placeholder = "Choose a column")),
       uiOutput("pick_treated"),
-      selectizeInput("x", label("characteristics", "Characteristics (X)"), choices = choices_for(x_pool(y0, w0)), multiple = TRUE,
-                     selected = if (ex) intersect(rv$gss$covariates, x_pool(y0, w0)),
+      selectizeInput("x", label("characteristics", "Characteristics (X)"), choices = choices_for(x_pool(NULL, NULL)), multiple = TRUE,
                      options = list(placeholder = "Choose one or more columns", plugins = list("remove_button"))),
       div(class = "links", action_link("x_all", "Select all"), " / ", action_link("x_none", "Clear")),
       accordion(
@@ -488,18 +496,13 @@ server <- function(input, output, session) {
     updateSelectizeInput(session, "y", choices = c("", choices_for(y_pool(opt("w")))), selected = opt("y") %||% "")
     update_x(opt("y"), opt("w"))
   }, ignoreInit = TRUE)
-  observeEvent(input$x_all, updateSelectizeInput(session, "x", selected = x_pool(opt("y"), opt("w"))))
+  # "Select all" leaves out the columns chosen as ID, weight or cluster.
+  observeEvent(input$x_all, updateSelectizeInput(session, "x",
+    selected = setdiff(x_pool(opt("y"), opt("w")), c(opt("ids"), opt("weights"), opt("clusters")))))
   observeEvent(input$x_none, updateSelectizeInput(session, "x", selected = character(0)))
 
-  output$pick_treated <- renderUI({
-    req(w_needs_coding())
-    vals <- as.character(w_values())
-    shown <- vals
-    codes <- source_data()$value_labels[[input$w]]
-    if (length(codes)) shown[vals %in% names(codes)] <- unname(codes[vals[vals %in% names(codes)]])
-    radioButtons("treated", label("treated", paste("Value of", input$w, "coded 1")), choices = stats::setNames(vals, shown),
-                 selected = vals[2], inline = TRUE)
-  })
+  output$pick_y_one <- renderUI({ req(y_needs_coding()); coding_choice("y_one", "y_one", input$y, y_values()) })
+  output$pick_treated <- renderUI({ req(w_needs_coding()); coding_choice("treated", "treated", input$w, w_values()) })
   output$run_note <- renderUI(if (!is.null(rv$run_note)) p(class = "shiny-output-error-validation mt-2", rv$run_note))
 
   # ---- Run, then show the results one whole step at a time -----------------
@@ -512,7 +515,7 @@ server <- function(input, output, session) {
     rv$run_note <- NULL
   }
   # Any change to the data or the analysis settings makes shown results stale.
-  observeEvent(list(rv$source, input$file, input$y, input$w, input$treated, input$x, input$ids,
+  observeEvent(list(rv$source, input$file, input$y, input$y_one, input$w, input$treated, input$x, input$ids,
                     input$weights, input$clusters, input$num_trees, input$seed),
                clear_results(), ignoreInit = TRUE)
 
@@ -536,17 +539,24 @@ server <- function(input, output, session) {
       src <- source_data()
       named <- function(v) { l <- unname(src$labels[v]); if (length(l) && !is.na(l)) l else v }
       continuous <- length(w_values()) > 2L
+      # For a binary Y, the effect is on the share with the value coded 1.
+      target <- if (length(y_values()) != 2L) named(input$y) else {
+        one <- if (isTRUE(y_needs_coding())) opt("y_one") %||% as.character(y_values()[2]) else "1"
+        codes <- src$value_labels[[input$y]]
+        paste0("the share with ", named(input$y), " = ", if (one %in% names(codes)) codes[[one]] else one)
+      }
       warnings <- character()
       report <- withProgress(message = "Growing the forest", detail = "This can take a minute.", value = 0.3, {
         withCallingHandlers(
           explore_heterogeneity(
             data = data(), y = input$y, w = input$w, x = input$x,
             treated = if (isTRUE(w_needs_coding())) opt("treated") else NULL,
+            y_one = if (isTRUE(y_needs_coding())) opt("y_one") else NULL,
             ids = opt("ids"), weights = opt("weights"), clusters = opt("clusters"),
             num_trees = input$num_trees %||% 2000, seed = input$seed %||% 21042020,
             labels = if (length(src$labels)) src$labels, value_labels = if (length(src$value_labels)) src$value_labels,
             effect_label = if (is_example && input$y == "rating_trump" && !continuous) rv$gss$effect_label else
-              if (continuous) paste("Change in", named(input$y), "per unit of", named(input$w)) else paste("Difference in", named(input$y))
+              paste0("Treatment effect on ", target, if (continuous) paste(" per unit of", named(input$w)))
           ),
           warning = function(w) { warnings <<- c(warnings, conditionMessage(w)); invokeRestart("muffleWarning") })
       })
@@ -582,37 +592,43 @@ server <- function(input, output, session) {
     lab <- r$settings$w_labels
     groups <- if (continuous) c("", "") else if (identical(unname(lab), c("0", "1"))) paste0(rv$res$w, " = ", lab) else unname(lab)
     group_tags <- if (continuous || !is.null(r$settings$value_labels[[rv$res$w]])) groups else vapply(groups, code_tag, "")
-    list(report = r, y = rv$res$y, w = rv$res$w, continuous = continuous,
-         noun = if (continuous) "slope" else "difference", plural = if (continuous) "slopes" else "differences",
+    y_binary <- identical(r$settings$y_type, "binary")
+    y_one <- if (y_binary) unname(r$settings$y_labels[2])
+    list(report = r, y = rv$res$y, w = rv$res$w, continuous = continuous, y_binary = y_binary,
+         y_tag = if (y_binary) sprintf("the share with %s = %s", code_tag(rv$res$y), y_one) else code_tag(rv$res$y),
+         y_text = if (y_binary) sprintf("the share with %s = %s", rv$res$y, y_one) else rv$res$y,
+         per = if (continuous) paste(" per unit of", code_tag(rv$res$w)) else "",
+         per_text = if (continuous) paste(" per unit of", rv$res$w) else "",
          average_key = if (continuous) "ape" else "ate",
          average_name = if (continuous) "average partial effect" else "average treatment effect",
          g0 = groups[1], g1 = groups[2], g0_tag = group_tags[[1]], g1_tag = group_tags[[2]],
          ate = r$ate$estimate, std = r$ate$standardized %||% NA_real_, top = utils::head(r$moderators, 3),
-         n_missing = sum(r$missingness$n_missing), notes = r$notes[!caution(r$notes)],
+         notes = r$notes[!caution(r$notes)],
          cautions = c(r$notes[caution(r$notes)], rv$res$warnings))
   })
   # Notes that call for caution are shown; the rest sit in an expander.
-  caution <- function(notes) grepl("^Only |^Some profiles have few|^Adjusted average unavailable", notes)
+  caution <- function(notes) grepl("^Only |^Some profiles have few|^Average treatment effect unavailable", notes)
   sub_title <- function(u) {
-    plural <- if (!is.null(rv$res) && identical(rv$res$report$settings$w_type, "continuous")) "slopes" else "differences"
-    switch(u, spread = paste("How much do predicted", plural, "vary?"),
-           characteristics = "Which candidate moderators did the forest use most?",
-           profiles = "Who has smaller and larger predictions?")
+    switch(u, spread = "Distribution of estimated treatment effects, conditional on covariates",
+           characteristics = "Candidate moderators of the treatment effect, ranked by importance",
+           profiles = "Characteristics across treatment effect quintiles")
   }
   average_sentence <- function(f) {
-    if (!is.finite(f$ate)) return(sprintf("The average adjusted %s (the %s) is unavailable; see the notes below.", f$noun, f$average_name))
+    name <- if (f$continuous) paste0(term("ape", "average treatment effect"), f$per, " (the average partial effect)")
+            else term("ate", "average treatment effect")
+    if (!is.finite(f$ate)) return(sprintf("The %s is unavailable; see the notes below.", name))
     effect <- if (f$continuous) sprintf("per one-unit increase in %s", code_tag(f$w)) else sprintf("for %s than for %s", f$g1_tag, f$g0_tag)
-    in_sd <- if (is.finite(f$std)) sprintf(", or <b>%s</b> %s%s", fmt(abs(f$std)), term("sd_units", "standard deviations"),
+    in_sd <- if (is.finite(f$std)) sprintf(" (<b>%s</b> %s%s)", fmt(f$std), term("sd_units", "standard deviations"),
                                            if (f$continuous) paste(" per standard deviation of", code_tag(f$w)) else "") else ""
-    sprintf("Comparing people with similar characteristics, %s is on average <b>%s</b> %s %s%s. This average adjusted %s is the %s.",
-            code_tag(f$y), fmt(abs(f$ate)), more_less(f$ate, "higher", "lower"), effect, in_sd, f$noun,
-            term(f$average_key, f$average_name))
+    points <- if (f$y_binary) sprintf(" (%s percentage points)", fmt(100 * abs(f$ate), 1)) else ""
+    sprintf("The %s is <b>%s</b>%s: comparing people with similar characteristics, %s is on average %s%s %s %s.",
+            name, fmt(f$ate), in_sd, f$y_tag, fmt(abs(f$ate)), points, more_less(f$ate, "higher", "lower"), effect)
   }
   importance_plot <- reactive(plot(report(), "importance"))
   profile_plot <- reactive(plot(report(), "profiles"))
   # Every characteristic gets a row, so these plots grow with their number.
   importance_height <- function() max(260, 90 + 24 * nrow(report()$moderators))
-  profile_height <- function() max(280, 110 + 28 * length(unique(profile_plot()$data$feature)))
+  profile_height <- function() max(320, 170 + 30 * length(unique(profile_plot()$data$feature)))
   # Plots as shown on the page. Headings and the text below each plot replace
   # its title and caption, and the background is transparent. In dark mode,
   # text and grid lines turn light, white outlines take the page colour, and
@@ -660,18 +676,17 @@ server <- function(input, output, session) {
         explained(list(
           short = paste0("The forest split most often, and earliest, on ",
                          and_list(sprintf("%s (%s)", name_tag(r, f$top$variable), fmt(f$top$importance))), "."),
-          long = paste0("These are the leading ", term("moderator", "candidate moderators"), ". ", term("importance", "Importance"),
-            " shows which characteristics the predictions depend on, but not whether the ", f$noun,
-            " rises or falls with them; step 3 shows that. Related characteristics share importance. The chart shows all ",
-            count_of(nrow(r$moderators), "usable characteristic"), " you chose.",
-            if (any(grepl("^Highly correlated", r$notes))) " Highly correlated pairs are listed in the notes on the data." else "")))
+          long = paste0("These are the leading ", term("moderator", "candidate moderators"), " among your chosen characteristics X ",
+            "as per our exploration with the causal forest. ", term("importance", "Importance"),
+            " shows which characteristics the estimated treatment effects depend on. Highly correlated characteristics can share ",
+            "importance and should be handled before running the causal forest.")))
       ),
       sub_section("profiles", sub_title("profiles"),
         div(class = "chart", plotOutput("profiles", height = "auto")),
         explained(profile_text())
       ))),
       "groups" = section(3, "Compare groups", div(class = "prose",
-        p(class = "muted", paste0("The adjusted ", f$noun, " within the groups of a characteristic, starting with the top ",
+        p(class = "muted", paste0("The average treatment effect within the groups of a characteristic, starting with the top ",
                                   "candidate moderator. Add a second characteristic for a heatmap.")),
         fluidRow(
           column(6, selectizeInput("x1", "Characteristic", choices = covariate_choices(r), selected = r$moderators$variable[1],
@@ -679,14 +694,12 @@ server <- function(input, output, session) {
           column(6, selectizeInput("x2", "Second characteristic (optional)", choices = c("", covariate_choices(r)),
                                    options = list(placeholder = "None")))),
         div(class = "chart", plotOutput("effect_plot", height = "440px")),
-        uiOutput("effect_text"),
-        fold("Table of groups", tableOutput("effect_table"))
+        uiOutput("effect_text")
       )),
       "export" = section(4, "Export results", div(class = "prose",
         div(class = "report-box", id = "report-text", report_text(f)),
         div(class = "mt-3",
-            tags$button(class = "btn btn-outline-dark btn-sm me-2", onclick = "copyReport(this)", "Copy text"),
-            downloadButton("dl_cates", "Predictions for each row (CSV)", class = "btn-outline-dark btn-sm"))
+            downloadButton("dl_cates", "Estimated treatment effect for each row (CSV)", class = "btn-outline-dark btn-sm"))
       ))
     )
   }
@@ -694,101 +707,91 @@ server <- function(input, output, session) {
   covariate_choices <- function(r) stats::setNames(r$settings$covariates, unname(r$labels[r$settings$covariates]))
   computed_text <- function(f) {
     r <- f$report
-    sd_used <- if (!is.finite(f$std)) "" else if (f$continuous)
-      sprintf(" In standard deviations, the average uses %s (SD %s) and %s (SD %s), measured before adjustment.",
-              code_tag(f$y), fmt(r$ate$sd_y), code_tag(f$w), fmt(r$ate$sd_w))
-      else sprintf(" In standard deviations, the average is divided by the spread of %s within the two groups, before adjustment (SD %s).",
-                   code_tag(f$y), fmt(r$ate$sd_y))
-    paste0(sprintf("The %s grew %s %s %s from %s observations and %s. It predicts the effect of W for every observation, and its averages, overall and within groups, are %s.",
+    paste0(sprintf("The %s grew %s %s %s from %s observations and %s. It estimates a treatment effect for every observation conditional on its covariates (called a %s).",
                    term("causal_forest", "causal forest"), fmt_n(r$settings$num_trees), term("honest", "honest"),
                    term("trees", "trees"), fmt_n(r$settings$n), count_of(length(r$settings$covariates), "characteristic"),
-                   term("doubly_robust", "doubly robust")),
-           sd_used,
+                   as.character(tags$a(href = cate_url, target = "_blank", rel = "noopener", "conditional average treatment effect"))),
            if (r$settings$weighted) " Survey weights were used for the forest and all averages." else "",
            if (r$settings$clustered) " Clusters were used for sampling." else "",
-           " The three plots below describe the predictions; step 3 compares groups of your choice.")
+           " The three plots below describe these estimated treatment effects.")
   }
   # A plot's key finding, with the rest of its explanation in an expander.
   explained <- function(text) tagList(p(class = "caption", HTML(text$short)),
                                       if (length(text$long)) fold("How to read this plot", p(HTML(text$long))))
 
-  # The histogram: the range of predictions and, in its expander, what the
-  # colours mean here.
+  # The histogram: the range of estimated treatment effects and, in its
+  # expander, what the colours mean here.
   spread_text <- function(f) {
     r <- f$report
     below <- sum(r$weights[r$cates$cate_estimate < 0]) / sum(r$weights)
     share <- if (below == 0) "All are above 0." else if (below == 1) "All are below 0."
-      else sprintf("%s%% of %s %s a predicted %s below 0.", formatC(100 * below, digits = 0, format = "f"),
-                   if (r$settings$weighted) "the weighted sample" else "observations", if (r$settings$weighted) "has" else "have", f$noun)
-    meaning <- if (f$continuous) sprintf("slopes where %s rises with %s, and red bars, below 0, slopes where it falls", code_tag(f$y), code_tag(f$w))
-      else sprintf("predictions where %s is higher for %s than for %s, and red bars, below 0, predictions where it is lower",
-                   code_tag(f$y), f$g1_tag, f$g0_tag)
-    list(short = sprintf("%s run from %s to %s, around the average of %s. %s", term("predicted", paste("Predicted", f$plural)),
-                         fmt(r$prediction_range[1]), fmt(r$prediction_range[2]), fmt(f$ate), share),
-         long = sprintf(paste("Each bar shows how many observations have a predicted %s in its range. As in the heatmaps, colours deepen",
-                              "with distance from 0: teal bars, above 0, mark %s.",
-                              "Part of this spread is %s, especially at the extremes, which rest on few observations. A prediction is the",
-                              "expected %s for people with similar characteristics, not one person's own %s."),
-                        f$noun, meaning, term("noise", "estimation noise"), f$noun, f$noun))
+      else sprintf("%s%% of %s %s an estimated treatment effect below 0.", formatC(100 * below, digits = 0, format = "f"),
+                   if (r$settings$weighted) "the weighted sample" else "observations", if (r$settings$weighted) "has" else "have")
+    meaning <- if (f$continuous) sprintf("effects where %s rises with %s, and red bars, below 0, effects where it falls", f$y_tag, code_tag(f$w))
+      else sprintf("effects where %s is higher for %s than for %s, and red bars, below 0, effects where it is lower",
+                   f$y_tag, f$g1_tag, f$g0_tag)
+    list(short = sprintf("%s%s run from %s to %s, around the average treatment effect of %s. %s", term("cate", "Estimated treatment effects"),
+                         f$per, fmt(r$prediction_range[1]), fmt(r$prediction_range[2]), fmt(f$ate), share),
+         long = sprintf(paste("Each estimate is a %s: the expected effect for people with similar characteristics X, not one person's",
+                              "own effect. Each bar shows how many observations have an estimated treatment effect in its range. The colours",
+                              "deepen with distance from 0: teal bars, above 0, mark %s. Part of this spread can come from %s, especially at",
+                              "the extremes, which rest on few observations."),
+                        term("cate", "conditional average treatment effect"), meaning, term("noise", "estimation noise")))
   }
 
-  # The profiles heatmap: where the end groups differ most and, in its
-  # expander, how to read the cells.
+  # The quintile heatmap: where the bottom and top quintiles differ most and,
+  # in its expander, how to read the cells. The comparison uses each
+  # characteristic's spread (the colours), so different units compare fairly.
   profile_text <- function() {
     d <- profile_plot()$data
-    groups <- sort(unique(d$quintile))
-    if (length(groups) < 2) return(list(short = "All observations have the same prediction, so there are no profiles to compare."))
-    first <- d[d$quintile == groups[1], ]; last <- d[d$quintile == groups[length(groups)], ]
+    columns <- levels(d$group)
+    if (length(columns) < 2) return(list(short = "All observations have the same estimated treatment effect, so there are no quintiles to compare."))
+    first <- d[d$group == columns[1], ]; last <- d[d$group == columns[length(columns)], ]
     last <- last[match(first$feature, last$feature), ]
+    ends <- sprintf("the %s and the %s of estimated treatment effects", tolower(columns[1]), tolower(columns[length(columns)]))
     gap <- last$z - first$z
     top <- utils::head(order(-abs(gap)), 2)
     top <- top[is.finite(gap[top])]
-    labels <- one_line(as.character(first$label[top]))
-    if (is.null(report()$settings$labels)) labels <- vapply(labels, code_tag, "")
+    names <- one_line(as.character(first$name[top]))
+    if (is.null(report()$settings$labels)) names <- vapply(names, code_tag, "")
     list(
-      short = if (length(top)) paste0("The groups with the smallest and largest predictions differ most on ",
-        paste(sprintf("%s (%s vs %s)", labels, fmt_z(first$z[top]), fmt_z(last$z[top])), collapse = " and "), ".")
-        else "The groups with the smallest and largest predictions do not differ on these characteristics.",
+      short = if (length(top)) paste0("Observations in ", ends, " differ most on ",
+        paste(sprintf("%s (average %s vs %s, range %s)", names, fmt(first$mean[top]), fmt(last$mean[top]), first$range[top]),
+              collapse = " and "), ".")
+        else paste0("Observations in ", ends, " do not differ on these characteristics."),
       long = paste0(
-        "Each row is a characteristic, in order of importance",
-        if (any(!is.na(report()$feature_map$level))) " (a text characteristic has one row per category)", ". Each column is a ",
-        term("prediction_group", "prediction group"), ": the observations are sorted by their predictions and split into up to five ",
-        "groups of about equal size, from the smallest predictions on the left to the largest on the right. A cell shows the group's average ",
-        term("z_score", "z-score"), ": 0 is the sample average, and +1 or \u22121 is one standard deviation above or below it. ",
-        if (length(top)) paste0("In the original units, the end groups' means are ",
-          paste(sprintf("%s vs %s for %s", fmt(first$mean[top]), fmt(last$mean[top]), labels), collapse = " and "), ". ") else "",
-        "Missing values are ignored. Because the groups are formed by sorting the predictions, some differences come from the ",
-        "sorting itself: read this plot as a description of the forest's pattern, and check meaningful groups in step 3."))
+        "Each row is a characteristic X, in order of importance, with its range in brackets",
+        if (any(!is.na(report()$feature_map$level))) " (a text characteristic has one row per category, shown as a share)", ". Each column is a ",
+        term("quintile", "treatment effect quintile"), ": the observations are sorted by their estimated treatment effect and split into five ",
+        "groups of about equal size, from the ", tolower(columns[1]), " on the left to the ", tolower(columns[length(columns)]),
+        " on the right. A cell shows the characteristic's average in that quintile. Colours compare it with the characteristic's overall ",
+        "average: teal above, red below, and deeper the further away, measured in standard deviations of that characteristic so that ",
+        "characteristics in different units can be compared."))
   }
 
   report_text <- function(f) {
     r <- f$report
     item <- function(label, ...) tags$li(tags$b(paste0(label, if (grepl("[?]$", label)) " " else ": ")), ...)
-    data_parts <- c(
-      if (r$n_dropped > 0) sprintf("%s rows with missing information were left out", fmt_n(r$n_dropped)),
-      if (f$n_missing > 0) sprintf("%s missing characteristic values were kept for the forest rather than filled in", fmt_n(f$n_missing)),
-      if (any(grepl("^Text characteristics became 0/1 indicators", r$notes))) "text characteristics were turned into yes/no (0/1) indicators",
-      if (any(grepl("left out", r$notes))) "characteristics that could not be used were set aside (see step 2)"
-    )
     sample <- sprintf("using %s and %s (X).", count_of(r$settings$n, "observation"), count_of(length(r$settings$covariates), "characteristic"))
-    analysed <- if (f$continuous) sprintf("How %s (Y) changes with %s (W), %s", f$y, f$w, sample)
-                else sprintf("How %s (Y) differs between %s and %s (W), %s", f$y, f$g1, f$g0, sample)
+    analysed <- if (f$continuous) sprintf("The treatment effect of %s (W) on %s (Y), per one-unit increase, %s", f$w, f$y_text, sample)
+                else sprintf("The treatment effect of %s versus %s (W) on %s (Y), %s", f$g1, f$g0, f$y_text, sample)
     effect <- if (f$continuous) sprintf("per one-unit increase in %s", f$w) else sprintf("for %s than for %s", f$g1, f$g0)
-    in_sd <- if (is.finite(f$std)) sprintf(", or %s standard deviations%s", fmt(abs(f$std)),
+    in_sd <- if (is.finite(f$std)) sprintf(" (%s standard deviations%s)", fmt(abs(f$std)),
                                            if (f$continuous) paste(" per standard deviation of", f$w) else "") else ""
-    average <- if (!is.finite(f$ate)) sprintf("The average adjusted %s (the %s) could not be estimated.", f$noun, f$average_name) else
-      sprintf("Comparing people with similar characteristics, %s was on average %s %s %s%s; this is the %s.",
-              f$y, fmt(abs(f$ate)), more_less(f$ate, "higher", "lower"), effect, in_sd, f$average_name)
+    average <- if (!is.finite(f$ate)) "The average treatment effect could not be estimated." else
+      sprintf("Comparing people with similar characteristics, %s was on average %s%s %s %s%s%s.",
+              f$y_text, fmt(abs(f$ate)), if (f$y_binary) sprintf(" (%s percentage points)", fmt(100 * abs(f$ate), 1)) else "",
+              more_less(f$ate, "higher", "lower"), effect, in_sd,
+              if (f$continuous) "; this is the average partial effect" else "")
     tags$ul(
       item("What was analysed", analysed),
-      if (length(data_parts)) item("Data", paste0(toupper(substring(data_parts[1], 1, 1)), substring(and_list(data_parts), 2), ".")),
-      item("Average effect", average),
-      item("How much does it vary?", sprintf("Predicted %s ranged from %s to %s; part of this spread is estimation noise.",
-                                             f$plural, fmt(r$prediction_range[1]), fmt(r$prediction_range[2]))),
+      item("Average treatment effect", average),
+      item("How much does it vary?", sprintf("Estimated treatment effects%s ranged from %s to %s; part of this spread could be estimation noise.",
+                                             f$per_text, fmt(r$prediction_range[1]), fmt(r$prediction_range[2]))),
       item("Candidate moderators", sprintf("The forest split most often on %s.", and_list(f$top$label))),
-      item("Keep in mind", paste0("These patterns are exploratory: use them to decide what to study next. Each prediction is an average for people with similar characteristics, not one person's own ",
-           f$noun, ". ", sprintf("Unless %s was randomly assigned, the effects are adjusted associations: they may reflect other causes. ", f$w),
-           if (r$settings$weighted) "Averages use the supplied weights." else "Without weights, the results describe this sample."))
+      item("Keep in mind", paste0("These patterns are exploratory: use them to decide what to study next. Each estimated treatment effect is an average for people with similar characteristics, not one person's own effect. ",
+           sprintf("Unless %s was randomly assigned, the effects are adjusted associations and may reflect other causes.", f$w),
+           if (r$settings$weighted) " Averages use the supplied weights." else ""))
     )
   }
 
@@ -815,33 +818,17 @@ server <- function(input, output, session) {
       "These groups also differ in other ways, so the plot describes ", term("association", "differences between groups of people"),
       ", not what would happen if a characteristic changed. Numeric characteristics are split into ",
       term("quantile_bins", "groups of about equal size"), ". Groups with fewer than 30 observations, ", rule, ", are not estimated.",
-      if (any(info$missing)) " The plot leaves out missing values; the table of groups includes them." else "")
+      if (any(info$missing)) " The plot leaves out missing values." else "")
     short <- if (nrow(est) < 2) paste0("Too few groups could be estimated to compare (each needs at least 30 observations, ", need, ").") else {
       lo <- est[which.min(est$estimate), ]; hi <- est[which.max(est$estimate), ]
       desc <- function(row) sprintf("%s (%s; n = %s)", if (is.null(r$settings$labels)) code_tag(row$label) else row$label,
                                     fmt(row$estimate), fmt_n(row$n))
-      paste0("The adjusted ", f$noun, " is smallest for ", desc(lo), " and largest for ", desc(hi),
-             ", against an overall average of ", fmt(r$ate$estimate), ".")
+      paste0("The average treatment effect is smallest for ", desc(lo), " and largest for ", desc(hi),
+             ", against the overall average treatment effect of ", fmt(r$ate$estimate), ".")
     }
     explained(list(short = short, long = long))
   })
-  output$effect_table <- renderTable({
-    t <- effect_tab(); f <- facts(); info <- attr(t, "plot")
-    out <- stats::setNames(lapply(info$levels, as.character), info$titles)
-    out[["n"]] <- fmt_n(t$n)
-    if (!f$continuous) {
-      out[[paste("n", f$g0)]] <- fmt_n(t$n_control)
-      out[[paste("n", f$g1)]] <- fmt_n(t$n_treated)
-    }
-    out[[paste("Adjusted", f$noun)]] <- ifelse(is.finite(t$estimate), fmt(t$estimate), "")
-    out[["Note"]] <- ifelse(t$status == "ok", "", t$status)
-    as.data.frame(out, check.names = FALSE)
-  }, align = "l")
-
-  # The table sits in a closed expander, so it must render while hidden.
-  outputOptions(output, "effect_table", suspendWhenHidden = FALSE)
-
-  output$dl_cates <- downloadHandler(function() "predictions.csv",
+  output$dl_cates <- downloadHandler(function() "treatment_effects.csv",
                                      function(file) utils::write.csv(report()$cates, file, row.names = FALSE))
 }
 

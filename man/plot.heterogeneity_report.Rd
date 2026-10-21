@@ -30,8 +30,9 @@ A ggplot object.
 \description{
 Three views of the fitted forest:
 \itemize{
-\item \code{"distribution"} (default): histogram of the out-of-bag predicted
-differences (or slopes), coloured like the heatmaps: increasingly red
+\item \code{"distribution"} (default): histogram of the estimated treatment
+effects conditional on covariates (out-of-bag estimates of the
+conditional average treatment effect), coloured like the heatmaps: increasingly red
 further below 0 and increasingly teal further above it, with equal
 distances from 0 equally deep; 0 is always a bin edge. The number of
 bins follows the Freedman-Diaconis rule. The spread includes estimation
@@ -39,15 +40,17 @@ noise.
 \item \code{"importance"}: all covariates, as candidate moderators, ranked by how
 much the forest split on them, weighted toward early splits; category
 indicators are added back to their covariate. Importance gives neither
-the size nor the direction of a difference, and related covariates share
-it.
+the size nor the direction of a treatment effect, and related covariates
+share it.
 \item \code{"profiles"}: for every covariate in order of importance (one row per
-category of a text covariate), the average z-score in each prediction
-group: up to five groups of about equal size, from the smallest
-predictions to the largest. Each covariate is standardized over all
-observations (mean 0, standard deviation 1), so negative cells are below
-the sample average and positive cells above it, on a scale shared by all
-covariates. Missing values are ignored.
+category of a text covariate, as a share), its average in each treatment
+effect quintile, labelled from the bottom 20\% of estimated treatment
+effects to the top 20\% (with many tied estimates, fewer groups, labelled
+by their actual shares). Row labels give each covariate's observed range.
+Colours compare each average with the covariate's overall average, teal
+above and red below, measured in standard deviations of that covariate,
+so covariates in different units share one colour scale. Missing values
+are ignored.
 }
 }
 \details{

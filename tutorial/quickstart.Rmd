@@ -22,8 +22,8 @@ one_line <- function(x) gsub("\\s*\n\\s*", " ", as.character(x))
 
 This tutorial shows how to explore whether the effect of one variable on another is larger for some people than for others. You need three things:
 
-- a **dependent variable (Y)**, the outcome you want to explain: numeric, either continuous or binary (0/1);
-- an **independent variable (W)**, whose effect on Y you want to study: two groups, such as treated and untreated, or a number, such as hours of use (see the [README](../README.md#a-numeric-independent-variable));
+- a **dependent variable (Y)**, the outcome you want to explain: binary, with any two values (such as voted or did not vote), or continuous (such as a test score);
+- an **independent variable (W)**, whose effect on Y you want to study: binary, with any two values (such as treated or untreated), or continuous (such as hours of use) (see the [README](../README.md#a-numeric-independent-variable));
 - **characteristics (X)** that might moderate the effect, that is, make it larger or smaller.
 
 A causal forest estimates the effect of W for people with different characteristics and points to patterns worth investigating.
@@ -78,18 +78,19 @@ ends <- range(profiles$quintile)
 low <- profiles[profiles$quintile == ends[1], ]
 high <- profiles[profiles$quintile == ends[2], ]
 high <- high[match(low$feature, high$feature), ]
-widest <- which.max(abs(high$z - low$z))
+widest <- which.max(abs(high$z - low$z))  # largest gap in standard deviations, so different units compare fairly
+columns <- tolower(levels(profiles$group))
 below <- mean(report$cates$cate_estimate < 0)
-below_text <- if (below == 0) "every prediction is above 0" else if (below == 1) "every prediction is below 0" else
-  sprintf("%s%% of the predictions are below 0", num(100 * below, 0))
+below_text <- if (below == 0) "every estimated treatment effect is above 0" else if (below == 1) "every estimated treatment effect is below 0" else
+  sprintf("%s%% of the estimated treatment effects are below 0", num(100 * below, 0))
 rows <- c(importance = nrow(report$moderators), profiles = nrow(report$feature_map))
 ```
 
-**The summary.** The average adjusted difference is **`r num(abs(report$ate$estimate))` rating points**: on average, `r tolower(groups[2])` respondents rate Trump `r num(abs(report$ate$estimate))` points `r direction` than `r tolower(groups[1])` respondents with similar characteristics. The report calls this the average treatment effect, the standard name for the quantity; because W was not randomly assigned here, it is an adjusted association rather than a causal effect. It also differs from simply subtracting the two group means, because it compares people with similar characteristics.
+**The summary.** The average treatment effect is **`r num(report$ate$estimate)` rating points**: on average, `r tolower(groups[2])` respondents rate Trump `r num(abs(report$ate$estimate))` points `r direction` than `r tolower(groups[1])` respondents with similar characteristics. "Treatment effect" is the standard name for this quantity; because W was not randomly assigned here, it is an adjusted association rather than a causal effect. It also differs from simply subtracting the two group means, because it compares people with similar characteristics.
 
 In standard deviations the average is **`r num(report$ate$standardized, 2)`**: the difference divided by how much ratings vary within the two groups, before adjustment (one standard deviation is `r num(report$ate$sd_y)` points). This standardized effect size can be compared across outcomes measured in different units. Everything else stays in rating points; dividing by `report$ate$sd_y` converts any of it.
 
-The forest's predictions range from `r num(report$prediction_range[1])` to `r num(report$prediction_range[2])` points. They come from `r count(report$settings$num_trees)` honest trees: each tree uses one part of the data to choose its splits and another part to estimate the differences, and each respondent's prediction comes only from trees grown without them ("out-of-bag"). The overall and group averages use doubly robust scores, which combine the predictions with the observed ratings. The candidate moderators are the characteristics the forest used most in its splits, and the data notes list everything that was changed or left out.
+The forest also estimates a treatment effect for each combination of characteristics (a conditional average treatment effect, CATE); these range from `r num(report$prediction_range[1])` to `r num(report$prediction_range[2])` points. They come from `r count(report$settings$num_trees)` honest trees: each tree uses one part of the data to choose its splits and another part to estimate the effects, and each respondent's estimate comes only from trees grown without them ("out-of-bag"). The overall and group averages use doubly robust scores, which combine the estimates with the observed ratings. The candidate moderators are the characteristics the forest used most in its splits, and the data notes list everything that was changed or left out.
 
 Below, the three plots are shown one at a time, each with its explanation. `plot(report)`, `plot(report, "importance")` and `plot(report, "profiles")` draw them on their own, for example to save one.
 
@@ -97,25 +98,25 @@ Below, the three plots are shown one at a time, each with its explanation. `plot
 plot(report)
 ```
 
-**Plot 1: how much do predicted differences vary?** The histogram shows each respondent's predicted difference, with the number of bins chosen from the data (the Freedman–Diaconis rule). As in the heatmaps, the colours deepen with distance from 0. Teal bars, above 0, are predictions in which `r tolower(groups[2])` respondents rate Trump higher than `r tolower(groups[1])` respondents with similar characteristics, and the further above 0, the deeper the teal; red bars, below 0, would show the reverse. Here `r below_text`. These are model predictions: part of their spread is estimation noise, so the plot is not the true distribution of effects, and the smallest and largest predictions are the least reliable.
+**Plot 1: distribution of estimated treatment effects, conditional on covariates.** The histogram shows each respondent's estimated treatment effect, with the number of bins chosen from the data (the Freedman–Diaconis rule). As in the heatmaps, the colours deepen with distance from 0. Teal bars, above 0, are estimates in which `r tolower(groups[2])` respondents rate Trump higher than `r tolower(groups[1])` respondents with similar characteristics, and the further above 0, the deeper the teal; red bars, below 0, would show the reverse. Here `r below_text`. These are model estimates: part of their spread is estimation noise, so the plot is not the true distribution of individual effects, and the smallest and largest estimates are the least reliable.
 
 ```{r plot-2, fig.height = 1.2 + 0.2 * rows[["importance"]]}
 plot(report, "importance")
 ```
 
-**Plot 2: which candidate moderators did the forest use most?** The chart ranks all `r rows[["importance"]]` characteristics. The top-ranked one is **`r report$moderators$label[1]`**. Importance measures how often, and how early, the forest split on a characteristic. That makes it a candidate moderator, not a proven one: importance does not say whether the difference rises or falls with the characteristic, and related characteristics share importance. For a text characteristic, the importance of its indicators is added together.
+**Plot 2: candidate moderators of the treatment effect, ranked by importance.** The chart ranks all `r rows[["importance"]]` characteristics. The top-ranked one is **`r report$moderators$label[1]`**. Importance measures how often, and how early, the forest split on a characteristic. That makes it a candidate moderator, not a proven one: importance does not say whether the treatment effect rises or falls with the characteristic, and related characteristics share importance. For a text characteristic, the importance of its indicators is added together.
 
 ```{r plot-3, fig.height = 1.4 + 0.24 * rows[["profiles"]]}
 plot(report, "profiles")
 ```
 
-**Plot 3: who has smaller and larger predictions?** Each row is a characteristic, in order of importance (a text characteristic gets one row per category). Each column is a prediction group: the respondents are sorted by their predictions and split into up to five groups of about equal size. A cell shows the group's average z-score: the value minus the sample mean, divided by the standard deviation. So 0 is the sample average, and negative cells are below it and positive cells above it, on the same scale for every characteristic. For example, `r quoted(one_line(low$label[widest]))` averages `r sprintf("%+.2f", low$z[widest])` in the group with the smallest predictions and `r sprintf("%+.2f", high$z[widest])` in the group with the largest. Missing values are ignored. Because the groups are formed by sorting the predictions, some separation comes from the sorting itself: use this plot to describe the forest's pattern, and check meaningful groups in step 3.
+**Plot 3: characteristics across treatment effect quintiles.** Each row is a characteristic, in order of importance (a text characteristic gets one row per category). Each column, labelled at the top, is a treatment effect quintile: the respondents are sorted by their estimated treatment effect and split into five groups of about equal size, from the `r columns[1]` to the `r columns[length(columns)]`. A cell shows the characteristic's average in that quintile, and the axis gives its range. The colours compare each average with the characteristic's overall average: teal above, red below, and deeper the further away, measured in standard deviations of that characteristic so that characteristics in different units can be compared. For example, `r quoted(one_line(low$name[widest]))` (range `r low$range[widest]`) averages `r num(low$mean[widest], 2)` in the `r columns[1]` of estimated treatment effects and `r num(high$mean[widest], 2)` in the `r columns[length(columns)]`. Missing values are ignored. Because the quintiles are formed by sorting the estimated treatment effects, some separation comes from the sorting itself: use this plot to describe the forest's pattern, and check meaningful groups in step 3.
 
 A few options are worth knowing. In a randomized experiment, supply the known probability of being in the group coded 1, such as `W_hat = 0.5`; otherwise, as here, the forest estimates it. Survey weights and clusters can be supplied as `weights = "svy_weight"` and `clusters = "psu_cluster"`; this illustration is unweighted, so it describes these respondents. The default seed (`r format(report$settings$seed, scientific = FALSE)`) makes the results reproducible. With many characteristics, `top_n` limits the importance and profile plots, for example `plot(report, "importance", top_n = 10)`.
 
 ## 3. Compare groups
 
-`effect_by()` is the focused check: it estimates the adjusted difference within the groups of one characteristic. Likelihood of voting is a natural first choice here, because it ranks `r which(report$moderators$variable == "lkelyvot")` of `r nrow(report$moderators)` in importance.
+`effect_by()` is the focused check: it estimates the average treatment effect within the groups of one characteristic. Likelihood of voting is a natural first choice here, because it ranks `r which(report$moderators$variable == "lkelyvot")` of `r nrow(report$moderators)` in importance.
 
 ```{r voting-table}
 voting <- effect_by(report, "lkelyvot")
@@ -129,7 +130,7 @@ highest <- observed[nrow(observed), ]
 category <- function(code) tolower(gss$value_labels$lkelyvot[[as.character(code)]])
 ```
 
-Each row is a group of respondents, labelled by its code (the codebook above gives the meaning). `n_control` counts the `r tolower(groups[1])` respondents in the group and `n_treated` the `r tolower(groups[2])` ones. A group with fewer than 30 respondents, or with only one group of W, gets no estimate, and its `status` says why. The difference is `r num(lowest$estimate)` points among respondents who are `r category(lowest$lkelyvot)` to vote and `r num(highest$estimate)` among those who are `r category(highest$lkelyvot)`. The table includes respondents with a missing answer as a group of their own; the plot leaves them out:
+Each row is a group of respondents, labelled by its code (the codebook above gives the meaning). `n_control` counts the `r tolower(groups[1])` respondents in the group and `n_treated` the `r tolower(groups[2])` ones. A group with fewer than 30 respondents, or with only one group of W, gets no estimate, and its `status` says why. The average treatment effect is `r num(lowest$estimate)` points among respondents who are `r category(lowest$lkelyvot)` to vote and `r num(highest$estimate)` among those who are `r category(highest$lkelyvot)`. The table includes respondents with a missing answer as a group of their own; the plot leaves them out:
 
 ```{r voting-plot}
 plot(voting)
@@ -148,7 +149,7 @@ first_age <- age_observed[1, ]
 last_age <- age_observed[nrow(age_observed), ]
 ```
 
-Age is cut into up to five groups of about equal size, labelled by the ages they contain. The difference is `r num(first_age$estimate)` points for ages `r as.character(first_age$age)` and `r num(last_age$estimate)` for ages `r as.character(last_age$age)`. These describe age groups, not the effect of growing older, and the group boundaries are not thresholds.
+Age is cut into up to five groups of about equal size, labelled by the ages they contain. The average treatment effect is `r num(first_age$estimate)` points for ages `r as.character(first_age$age)` and `r num(last_age$estimate)` for ages `r as.character(last_age$age)`. These describe age groups, not the effect of growing older, and the group boundaries are not thresholds.
 
 Two characteristics give a heatmap:
 
@@ -156,21 +157,21 @@ Two characteristics give a heatmap:
 plot(effect_by(report, "lkelyvot", "income16"))
 ```
 
-With two characteristics, numeric ones are cut into three groups each. Income is recorded in ordered categories, not dollar amounts; `gss$codebook` gives their meaning. Each cell shows an adjusted difference and its number of respondents, coloured around the overall average. Grey cells have too few respondents, or only one group of W, to be estimated. The heatmap leaves out respondents missing either characteristic; the table from `effect_by(report, "lkelyvot", "income16")` includes them.
+With two characteristics, numeric ones are cut into three groups each. Income is recorded in ordered categories, not dollar amounts; `gss$codebook` gives their meaning. Each cell shows an average treatment effect and its number of respondents, coloured around the overall average treatment effect. Grey cells have too few respondents, or only one group of W, to be estimated. The heatmap leaves out respondents missing either characteristic; the table from `effect_by(report, "lkelyvot", "income16")` includes them.
 
 ## 4. Export results
 
-Save the estimates and predictions as ordinary CSV files:
+Save the group estimates, the importance ranking and each respondent's estimated treatment effect as ordinary CSV files:
 
 ```{r export, eval=FALSE}
 write.csv(effect_by(report, "age"), "age_groups.csv", row.names = FALSE)
 write.csv(report$moderators, "importance.csv", row.names = FALSE)
-write.csv(report$cates, "predictions.csv", row.names = FALSE)
+write.csv(report$cates, "treatment_effects.csv", row.names = FALSE)
 ```
 
 A short report can say:
 
-> Among `r count(report$settings$n)` GSS respondents, those identifying as conservative rated Trump `r num(abs(report$ate$estimate))` points (`r num(abs(report$ate$standardized), 2)` standard deviations) `r direction`, on average, than liberal or moderate respondents with similar characteristics. The characteristics the forest used most were `r quoted(report$moderators$label[1:3])`. Across voting-likelihood groups, the adjusted difference ranged from `r num(min(observed$estimate, na.rm = TRUE))` to `r num(max(observed$estimate, na.rm = TRUE))` points. The analysis was unweighted, and missing characteristics were kept for the forest rather than filled in. These patterns are exploratory: predictions describe profiles and include noise.
+> Among `r count(report$settings$n)` GSS respondents, those identifying as conservative rated Trump `r num(abs(report$ate$estimate))` points (`r num(abs(report$ate$standardized), 2)` standard deviations) `r direction`, on average, than liberal or moderate respondents with similar characteristics. The characteristics the forest used most were `r quoted(report$moderators$label[1:3])`. Across voting-likelihood groups, the average treatment effect ranged from `r num(min(observed$estimate, na.rm = TRUE))` to `r num(max(observed$estimate, na.rm = TRUE))` points. The analysis was unweighted, and missing characteristics were kept for the forest rather than filled in. These patterns are exploratory: estimated treatment effects describe profiles and include noise.
 
 Add the group estimates and counts relevant to your question. A causal reading needs a defensible research design, comparable groups and suitable characteristics; the GSS example makes no causal claim.
 

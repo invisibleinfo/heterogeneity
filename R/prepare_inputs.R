@@ -25,28 +25,28 @@
 #' values; it does not remove bias from missing data.
 #'
 #' @param data A data frame.
-#' @param y,w Names of the dependent variable (outcome; numeric: continuous or
-#'   0/1) and the independent variable (treatment or comparison). An
-#'   independent variable with two values is coded 0/1; a numeric one with more
-#'   values is kept as a continuous scale.
+#' @param y,w Names of the dependent variable (outcome) and the independent
+#'   variable (treatment or comparison). Each can be binary, with any two
+#'   values, which are coded 0/1, or continuous, a numeric scale with more
+#'   values, which is kept as it is.
 #' @param x Character vector of covariate column names.
 #' @param ids,weights,clusters Optional names of identifier, survey-weight and
 #'   cluster columns. Without `ids`, original row numbers are retained after
 #'   dropping rows. Cluster labels are encoded as integer group identifiers.
-#' @param treated For a two-valued `w` (including 0/1), the value to
-#'   code as 1; by default the larger (or alphabetically later) value.
+#' @param treated,y_one For a two-valued `w` or `y` (including 0/1), the value
+#'   to code as 1; by default the larger (or alphabetically later) value.
 #' @param max_categories Text covariates with more categories than this are
 #'   rejected (they are usually identifiers or free text).
 #' @return A list with `Y`, `W`, numeric `X`, original `covariates`, a
 #'   `feature_map` linking indicators to their source variables, `missingness`,
 #'   `row_index`, `ids`, `weights`, `clusters`, the number
-#'   of observations used (`n`) and dropped (`n_dropped`), `w_type`
-#'   (`"binary"` or `"continuous"`), `w_labels` (for a binary `w`, the
-#'   original values coded as `0` and `1`; otherwise `NULL`) and `notes`, a
-#'   character vector describing each change.
+#'   of observations used (`n`) and dropped (`n_dropped`), `y_type` and
+#'   `w_type` (`"binary"` or `"continuous"`), `y_labels` and `w_labels` (for a
+#'   binary variable, the original values coded as `0` and `1`; otherwise
+#'   `NULL`) and `notes`, a character vector describing each change.
 #' @noRd
 prepare_inputs <- function(data, y, w, x, ids = NULL, weights = NULL, clusters = NULL, treated = NULL,
-                           max_categories = 20) {
+                           y_one = NULL, max_categories = 20) {
   data <- as.data.frame(data)
   if (anyNA(names(data)) || any(!nzchar(names(data))) || anyDuplicated(names(data))) {
     stop("Data columns must have nonempty, unique names.")
@@ -107,7 +107,28 @@ prepare_inputs <- function(data, y, w, x, ids = NULL, weights = NULL, clusters =
   converted <- names(d)[was_text & vapply(d, is.numeric, logical(1))]
   if (length(converted)) notes <- c(notes, paste0("Text columns holding only numbers were read as numbers: ",
                                                   paste(converted, collapse = ", "), "."))
-  for (v in c(y, weights)) if (!is.numeric(d[[v]])) stop("'", v, "' must be numeric.")
+  if (!is.null(weights) && !is.numeric(d[[weights]])) stop("'", weights, "' must be numeric.")
+
+  # Dependent variable, coded like the independent one below: two values are
+  # coded 0/1, so effects are differences in the share coded 1; numbers with
+  # more values are a continuous scale.
+  y_vals <- as.character(sort(unique(d[[y]][!is.na(d[[y]])])))
+  if (length(y_vals) == 2L) {
+    y_type <- "binary"
+    y1 <- if (is.null(y_one)) y_vals[2] else as.character(y_one)
+    if (length(y1) != 1L || is.na(y1) || !y1 %in% y_vals) {
+      stop("'y_one' must be one of the two values of '", y, "': ", paste(y_vals, collapse = ", "))
+    }
+    y0 <- setdiff(y_vals, y1)
+    if (!(identical(y_vals, c("0", "1")) && y1 == "1")) {
+      notes <- c(notes, sprintf("%s was recoded so that '%s' = 1 and '%s' = 0; effects are differences in the share of '%s'.", y, y1, y0, y1))
+    }
+    d[[y]] <- ifelse(is.na(d[[y]]), NA, as.numeric(as.character(d[[y]]) == y1))
+  } else {
+    if (!is.numeric(d[[y]])) stop("'", y, "' must be numeric, or have two values.")
+    if (!is.null(y_one)) stop("'y_one' applies only to a dependent variable with two values.")
+    y_type <- "continuous"
+  }
 
   # Independent variable: two values are coded 0/1; a numeric scale is kept.
   vals <- as.character(sort(unique(d[[w]][!is.na(d[[w]])])))
@@ -127,7 +148,7 @@ prepare_inputs <- function(data, y, w, x, ids = NULL, weights = NULL, clusters =
                                   length(vals), " text values).")
     if (!is.null(treated)) stop("'treated' applies only to an independent variable with two values.")
     w_type <- "continuous"
-    notes <- c(notes, sprintf("%s has %s values and is used as a continuous scale: results are slopes, the change per one-unit increase in %s.",
+    notes <- c(notes, sprintf("%s has %s values and is used as a continuous scale: treatment effects are slopes, the change per one-unit increase in %s.",
                               w, fmt_n(length(vals)), w))
   }
 
@@ -162,12 +183,8 @@ prepare_inputs <- function(data, y, w, x, ids = NULL, weights = NULL, clusters =
     n_missing = vapply(covariates, function(v) sum(is.na(v)), integer(1)),
     n = nrow(d), row.names = NULL)
   missingness$proportion <- missingness$n_missing / missingness$n
-  if (any(missingness$n_missing > 0)) {
-    notes <- c(notes, sprintf("Missing characteristic values were kept for the forest: %s values across %s rows; none were filled in.",
-      fmt_n(sum(missingness$n_missing)), fmt_n(sum(!stats::complete.cases(covariates)))))
-    many <- missingness$variable[missingness$proportion > 0.2]
-    if (length(many)) notes <- c(notes, paste0("More than 20% of values are missing for: ", paste(many, collapse = ", "), "."))
-  }
+  many <- missingness$variable[missingness$proportion > 0.2]
+  if (length(many)) notes <- c(notes, paste0("More than 20% of values are missing for: ", paste(many, collapse = ", "), "."))
 
   # Text covariates become 0/1 indicators: one for two categories (the less
   # common one), otherwise one per category, most common first. Trees need no
@@ -228,7 +245,8 @@ prepare_inputs <- function(data, y, w, x, ids = NULL, weights = NULL, clusters =
     ids = if (is.null(ids)) row_ids else d[[ids]],
     weights = if (is.null(weights)) NULL else d[[weights]],
     clusters = cluster_ids,
-    n = nrow(d), n_dropped = n_start - nrow(d), w_type = w_type,
+    n = nrow(d), n_dropped = n_start - nrow(d), y_type = y_type, w_type = w_type,
+    y_labels = if (y_type == "binary") c(`0` = y0, `1` = y1),
     w_labels = if (w_type == "binary") c(`0` = zero, `1` = one), notes = notes
   )
 }
