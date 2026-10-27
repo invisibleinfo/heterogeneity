@@ -228,10 +228,10 @@ A few options are worth knowing:
   who include an oversample of Black, Hispanic, and Asian American,
   Native Hawaiian and Pacific Islander respondents.
 - `controls`: characteristics to adjust for but not to study as
-  moderators, such as common causes of W and Y. The forest uses them to
-  adjust the comparison but does not split on them, so the importance
-  ranking and the plots leave them out. Keep several candidate
-  moderators, because forests work poorly with only one to three.
+  moderators, such as common causes of W and Y. The forest uses them
+  like every other characteristic, so each estimated treatment effect
+  accounts for them, but the importance ranking and the plots leave them
+  out.
 - `seed`: the default (21042020) makes the results reproducible.
 
 `print(report, plots = FALSE)` shows the summary without the plots, and
@@ -442,10 +442,7 @@ are not stored and are deleted when the session ends.
 ## More background
 
 The [grf guide](https://grf-labs.github.io/grf/articles/grf_guide.html)
-explains the underlying method and its handling of missing values. The
-[Stanford
-tutorial](https://bookdown.org/stanfordgsbsilab/ml-ci-tutorial/hte-i-binary-treatment.html)
-gives more background.
+explains the underlying method and its handling of missing values.
 
     ##       Component Version
     ## 1             R   4.5.3

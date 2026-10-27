@@ -284,7 +284,7 @@ terms <- c(
   dependent = "The variable you want to explain (Y): binary, with any two values (such as voted (1) and did not vote (0)), or continuous (such as a test score).",
   independent = "The variable whose effect on Y you want to study (W): binary, with any two values (such as treated (1) and untreated (0)), or continuous (such as hours of use).",
   characteristics = "Background information about each person (X), such as age or education, that might moderate the treatment effect of W on Y. Text columns become 0/1 indicators.",
-  controls = "Characteristics to adjust for that are not of interest as moderators, such as common causes of W and Y. The forest uses them to adjust the comparison of Y between values of W, but does not split on them.",
+  controls = "Characteristics to adjust for that are not of interest as moderators, such as common causes of W and Y. The forest uses them to adjust the comparison of Y between values of W.",
   moderate = "A characteristic moderates the treatment effect when the effect is larger or smaller depending on its value: a programme might, for example, help younger people more than older people.",
   treatment_effect = "How much Y changes with W for people with similar characteristics: the difference between the two groups of a binary W, or the change per one-unit increase in a continuous W. It is a causal effect if W was randomly assigned, or every common cause of W and Y is among the characteristics X.",
   heterogeneity = "Differences in the treatment effect of W on Y from one kind of person to another: the effect is heterogeneous when it is larger for some people than for others.",
@@ -2097,7 +2097,7 @@ server <- function(input, output, session) {
         paste0(
           " The controls (",
           and_list(readable(r, r$settings$controls)),
-          ") adjust the comparison but are not used to find differences in the treatment effect, so the results show only the candidate moderators."
+          ") adjust the comparison and are used by the forest like every other characteristic, but the results show only the candidate moderators."
         )
       } else {
         ""

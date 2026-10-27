@@ -175,26 +175,3 @@ effect_words <- function(report) {
     )
   }
 }
-
-# grf's debiasing weights for a numeric W, (W - E[W | X]) / Var[W | X], built
-# as get_scores() builds them, but with Var[W | X] estimated from the columns
-# X given here rather than from the forest's split variables only.
-debiasing_weights <- function(forest, X) {
-  residual <- forest$W.orig - forest$W.hat
-  clusters <- if (length(forest$clusters)) {
-    forest$clusters
-  } else {
-    seq_along(residual)
-  }
-  variance <- grf::regression_forest(
-    X,
-    residual^2,
-    clusters = clusters,
-    sample.weights = forest$sample.weights,
-    num.trees = 500,
-    ci.group.size = 1,
-    seed = forest$seed,
-    num.threads = forest$num.threads
-  )
-  residual / stats::predict(variance)$predictions
-}

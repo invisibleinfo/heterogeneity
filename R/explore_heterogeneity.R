@@ -69,21 +69,16 @@
 #' @param x Character vector of covariate names in `data`: the candidate
 #'   moderators.
 #' @param controls Characteristics to adjust for that are not candidate
-#'   moderators, such as common causes of `W` and `Y`. With `controls`, the
-#'   forest's models for `Y` and `W` (its adjustment) use the moderators and
-#'   the controls, with the settings grf uses for its own models, while the
-#'   forest splits only on the moderators, so controls do not appear in the
-#'   importance ranking or [effect_by()]. This follows grf's
-#'   pattern of estimating `Y.hat` and `W.hat` with a wider set of covariates
-#'   than the forest uses for heterogeneity. For a numeric `W`, the variance of
-#'   `W` in the doubly robust scores is estimated from all of them too. Each
-#'   estimated treatment effect then describes people with the same candidate
-#'   moderators, averaged over the controls (weighted, as in grf, by how much
-#'   `W` varies among people with the same characteristics). grf notes that
-#'   forests may have a hard time with very few split variables (one to
-#'   three), so keep several candidate moderators where you can. With `data`,
-#'   column names; otherwise a numeric data frame or matrix with one row per
-#'   observation.
+#'   moderators, such as common causes of `W` and `Y`. The forest uses them
+#'   exactly like the candidate moderators, in its models for `Y` and `W` and
+#'   in its splits, so each estimated treatment effect describes people with
+#'   the same characteristics, controls included. The results then leave them
+#'   out: they appear in neither the importance ranking nor [effect_by()],
+#'   whose averages are taken over the controls. (A forest that could not
+#'   split on a control that also moderates the effect would average over it
+#'   with weights that depend on how predictable `W` is, unlike the plain
+#'   averages of the report.) With `data`, column names; otherwise a numeric
+#'   data frame or matrix with one row per observation.
 #' @param treated For a two-valued `w`, the value coded 1 and compared against
 #'   the other; by default the larger or alphabetically later.
 #' @param y_one For a two-valued `y`, the value coded 1, so that effects are
@@ -352,16 +347,15 @@ explore_heterogeneity <- function(
     outcome_name <- "Y"
     comparison_name <- "W"
   }
-  # The forest splits on the candidate moderators; controls only adjust.
+  # The forest uses every characteristic, controls included, so each estimate
+  # describes people with the same characteristics; the results report the
+  # candidate moderators only.
   moderators_used <- intersect(candidates, names(inp$covariates))
   controls_used <- setdiff(names(inp$covariates), moderators_used)
   if (!length(moderators_used)) {
     stop("No usable candidate moderators are left.")
   }
-  splits <- inp$feature_map$variable %in% moderators_used
-  X_split <- inp$X[splits]
-  feature_map <- inp$feature_map[splits, , drop = FALSE]
-  rownames(feature_map) <- NULL
+  feature_map <- inp$feature_map
   covariates <- inp$covariates[moderators_used]
   missingness <- inp$missingness
   missingness$role <- ifelse(
@@ -427,45 +421,21 @@ explore_heterogeneity <- function(
     add = TRUE
   )
   set.seed(seed)
+  # grf fits the models for Y and W itself, from every characteristic; a known
+  # W_hat replaces the model for W.
   forest <- tryCatch(
-    {
-      # With controls, the models for Y and W use every characteristic, with
-      # the settings grf uses for them, and the forest splits on the
-      # moderators only. Without controls, grf fits both models itself.
-      adjust <- function(target) {
-        as.numeric(
-          stats::predict(grf::regression_forest(
-            inp$X,
-            target,
-            num.trees = max(50, num_trees / 4),
-            sample.weights = inp$weights,
-            clusters = inp$clusters,
-            ci.group.size = 1,
-            tune.parameters = if (tune) "all" else "none",
-            seed = seed
-          ))$predictions
-        )
-      }
-      Y_hat <- if (length(controls_used)) adjust(inp$Y)
-      W_hat_fit <- if (!is.null(W_hat)) {
-        W_hat
-      } else if (length(controls_used)) {
-        adjust(inp$W)
-      }
-      grf::causal_forest(
-        X_split,
-        inp$Y,
-        inp$W,
-        Y.hat = Y_hat,
-        W.hat = W_hat_fit,
-        num.trees = num_trees,
-        honesty = TRUE,
-        seed = seed,
-        sample.weights = inp$weights,
-        clusters = inp$clusters,
-        tune.parameters = if (tune) "all" else "none"
-      )
-    },
+    grf::causal_forest(
+      inp$X,
+      inp$Y,
+      inp$W,
+      W.hat = W_hat,
+      num.trees = num_trees,
+      honesty = TRUE,
+      seed = seed,
+      sample.weights = inp$weights,
+      clusters = inp$clusters,
+      tune.parameters = if (tune) "all" else "none"
+    ),
     error = function(e) {
       stop(
         "The forest could not be fitted (grf: ",
@@ -481,14 +451,7 @@ explore_heterogeneity <- function(
       "The forest could not predict every row. Check sample size and group overlap."
     )
   }
-  # For a numeric W, the scores divide by Var[W | X]; with controls, X
-  # includes them, as it does in the models for Y and W.
-  scores <- as.numeric(grf::get_scores(
-    forest,
-    debiasing.weights = if (!binary && length(controls_used)) {
-      debiasing_weights(forest, inp$X)
-    }
-  ))
+  scores <- as.numeric(grf::get_scores(forest))
   averaging_weights <- if (is.null(inp$weights)) rep(1, inp$n) else inp$weights
   average <- point_average(scores, averaging_weights)
   ate <- c(
@@ -534,13 +497,19 @@ explore_heterogeneity <- function(
     notes <- c(
       notes,
       paste0(
-        "Controls adjust the comparison but are not used for splits: ",
+        "Controls are used by the forest but left out of the results: ",
         paste(controls_used, collapse = ", "),
         "."
       )
     )
   }
-  correlated <- highly_correlated(covariates)
+  # Pairs with a candidate moderator; a moderator can share importance with a
+  # control too.
+  correlated <- highly_correlated(inp$covariates)
+  involved <- correlated$x %in%
+    moderators_used |
+    correlated$y %in% moderators_used
+  correlated <- correlated[involved, , drop = FALSE]
   if (nrow(correlated)) {
     notes <- c(
       notes,
@@ -583,7 +552,7 @@ explore_heterogeneity <- function(
       missingness = missingness,
       notes = notes,
       n_dropped = inp$n_dropped,
-      X = X_split,
+      X = inp$X,
       covariates = covariates,
       feature_map = feature_map,
       Y = inp$Y,

@@ -158,7 +158,7 @@ A few options are worth knowing:
 - `W_hat`: in a randomized experiment, the known probability of being in the group coded 1, such as `W_hat = 0.5`; otherwise, as here, the forest estimates it.
 - `treated` and `y_one`: for a binary W or Y, the value coded 1; by default the larger (or alphabetically later) value, so effects are that value minus the other.
 - `weights` and `clusters`: survey weights apply to the forest and to every average; clusters, such as students in the same school, are sampled together, while each observation still counts once in averages. Here `weights = "svy_weight"` would describe U.S. adults. This illustration is unweighted, so it describes these respondents, who include an oversample of Black, Hispanic, and Asian American, Native Hawaiian and Pacific Islander respondents.
-- `controls`: characteristics to adjust for but not to study as moderators, such as common causes of W and Y. The forest uses them to adjust the comparison but does not split on them, so the importance ranking and the plots leave them out. Keep several candidate moderators, because forests work poorly with only one to three.
+- `controls`: characteristics to adjust for but not to study as moderators, such as common causes of W and Y. The forest uses them like every other characteristic, so each estimated treatment effect accounts for them, but the importance ranking and the plots leave them out.
 - `seed`: the default (`r format(report$settings$seed, scientific = FALSE)`) makes the results reproducible.
 
 `print(report, plots = FALSE)` shows the summary without the plots, and with many characteristics `top_n` limits the importance plot, for example `plot(report, "importance", top_n = 10)`.
@@ -290,7 +290,7 @@ With controls, the printed summary counts them separately ("`r length(gss$covari
 
 ## More background
 
-The [grf guide](https://grf-labs.github.io/grf/articles/grf_guide.html) explains the underlying method and its handling of missing values. The [Stanford tutorial](https://bookdown.org/stanfordgsbsilab/ml-ci-tutorial/hte-i-binary-treatment.html) gives more background.
+The [grf guide](https://grf-labs.github.io/grf/articles/grf_guide.html) explains the underlying method and its handling of missing values.
 
 ```{r versions, echo=FALSE}
 data.frame(

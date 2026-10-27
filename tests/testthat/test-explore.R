@@ -1048,7 +1048,7 @@ test_that("a binary Y is coded like a binary W, with any two values", {
   )
 })
 
-test_that("controls enter the adjustment models but not the splits or the results", {
+test_that("controls enter the forest but not the results", {
   set.seed(22)
   n2 <- 600
   d <- data.frame(
@@ -1068,14 +1068,11 @@ test_that("controls enter the adjustment models but not the splits or the result
   )
   expect_identical(r$settings$controls, "conf")
   expect_setequal(r$moderators$variable, c("age", "region"))
-  expect_false(
-    "conf" %in%
-      c(names(r$covariates), r$feature_map$variable, colnames(r$forest$X.orig))
-  )
-  expect_false("conf" %in% r$moderators$variable)
+  # The forest uses the control; the results leave it out.
+  expect_true("conf" %in% colnames(r$forest$X.orig))
+  expect_false("conf" %in% c(names(r$covariates), r$moderators$variable))
   expect_error(effect_by(r, "conf"), "present in the report")
-  # The models for Y and W are the ones grf itself fits from the moderators
-  # and the controls together.
+  # It is grf's own forest on every characteristic, with grf's own scores.
   all_x <- heterogeneity:::prepare_inputs(
     d,
     "y",
@@ -1085,6 +1082,8 @@ test_that("controls enter the adjustment models but not the splits or the result
   full <- grf::causal_forest(all_x, d$y, d$w, num.trees = 200, seed = 21042020)
   expect_equal(r$forest$Y.hat, full$Y.hat)
   expect_equal(r$forest$W.hat, full$W.hat)
+  expect_equal(r$estimates, as.numeric(stats::predict(full)$predictions))
+  expect_equal(r$scores, as.numeric(grf::get_scores(full)))
   expect_equal(
     r$ate$estimate,
     unname(grf::average_treatment_effect(r$forest)["estimate"])
@@ -1092,7 +1091,7 @@ test_that("controls enter the adjustment models but not the splits or the result
   expect_identical(r$missingness$role, c("moderator", "moderator", "control"))
   expect_output(print(r, plots = FALSE), "2 candidate moderators and 1 control")
   expect_true(any(grepl(
-    "Controls adjust the comparison but are not used for splits: conf.",
+    "Controls are used by the forest but left out of the results: conf.",
     r$notes,
     fixed = TRUE
   )))
@@ -1150,28 +1149,12 @@ test_that("controls enter the adjustment models but not the splits or the result
   expect_identical(v$moderators$variable, "age")
 })
 
-test_that("for a numeric W, controls also enter the variance of W in the scores", {
+test_that("for a numeric W, the scores are grf's own, from every characteristic", {
   set.seed(23)
   n2 <- 500
   d <- data.frame(age = rnorm(n2), conf = rnorm(n2))
   d$dose <- d$conf + runif(n2, 0, 2) * (1 + (d$conf > 0))
   d$y <- d$dose * (1 + (d$age > 0)) + 2 * d$conf + rnorm(n2)
-  all_x <- heterogeneity:::prepare_inputs(d, "y", "dose", c("age", "conf"))$X
-  # The helper rebuilds grf's own weights when given the forest's covariates.
-  full <- grf::causal_forest(
-    all_x,
-    d$y,
-    d$dose,
-    num.trees = 200,
-    seed = 21042020
-  )
-  expect_equal(
-    as.numeric(grf::get_scores(
-      full,
-      debiasing.weights = heterogeneity:::debiasing_weights(full, all_x)
-    )),
-    as.numeric(grf::get_scores(full))
-  )
   r <- explore_heterogeneity(
     data = d,
     y = "y",
@@ -1180,20 +1163,36 @@ test_that("for a numeric W, controls also enter the variance of W in the scores"
     controls = "conf",
     num_trees = 200
   )
-  weights <- heterogeneity:::debiasing_weights(r$forest, all_x)
-  expect_equal(
-    r$scores,
-    as.numeric(grf::get_scores(r$forest, debiasing.weights = weights))
-  )
+  # grf estimates Var[W | X] from the forest's covariates, controls included.
+  expect_true("conf" %in% colnames(r$forest$X.orig))
+  expect_equal(r$scores, as.numeric(grf::get_scores(r$forest)))
   expect_equal(
     r$ate$estimate,
-    unname(grf::average_treatment_effect(r$forest, debiasing.weights = weights)[
-      "estimate"
-    ])
+    unname(grf::average_treatment_effect(r$forest)["estimate"])
   )
-  # grf's default would estimate Var[W | X] from age alone.
-  expect_false(isTRUE(all.equal(
-    r$scores,
-    as.numeric(grf::get_scores(r$forest))
-  )))
+})
+
+test_that("with a control that also moderates, the estimates are plain averages", {
+  # c changes both who is treated and the effect. A forest that could not
+  # split on c would average its effects with weights e(1 - e), about 6 here,
+  # instead of the plain average of about 5.
+  set.seed(24)
+  n2 <- 2000
+  d <- data.frame(z = rnorm(n2), z2 = rnorm(n2), c = rbinom(n2, 1, .5))
+  e <- ifelse(d$c == 1, .5, .15)
+  d$w <- rbinom(n2, 1, e)
+  tau <- ifelse(d$c == 1, 8, 2)
+  d$y <- 3 * d$c + d$z + d$w * tau + rnorm(n2)
+  r <- explore_heterogeneity(
+    data = d,
+    y = "y",
+    w = "w",
+    x = c("z", "z2"),
+    controls = "c",
+    num_trees = 500
+  )
+  plain <- mean(tau)
+  weighted <- sum(e * (1 - e) * tau) / sum(e * (1 - e))
+  expect_lt(abs(mean(r$estimates) - plain), abs(mean(r$estimates) - weighted))
+  expect_lt(abs(r$ate$estimate - plain), .5)
 })

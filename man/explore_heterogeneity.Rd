@@ -81,21 +81,16 @@ the other; by default the larger or alphabetically later.}
 differences in its share; by default the larger or alphabetically later.}
 
 \item{controls}{Characteristics to adjust for that are not candidate
-moderators, such as common causes of \code{W} and \code{Y}. With \code{controls}, the
-forest's models for \code{Y} and \code{W} (its adjustment) use the moderators and
-the controls, with the settings grf uses for its own models, while the
-forest splits only on the moderators, so controls do not appear in the
-importance ranking or \code{\link[=effect_by]{effect_by()}}. This follows grf's
-pattern of estimating \code{Y.hat} and \code{W.hat} with a wider set of covariates
-than the forest uses for heterogeneity. For a numeric \code{W}, the variance of
-\code{W} in the doubly robust scores is estimated from all of them too. Each
-estimated treatment effect then describes people with the same candidate
-moderators, averaged over the controls (weighted, as in grf, by how much
-\code{W} varies among people with the same characteristics). grf notes that
-forests may have a hard time with very few split variables (one to
-three), so keep several candidate moderators where you can. With \code{data},
-column names; otherwise a numeric data frame or matrix with one row per
-observation.}
+moderators, such as common causes of \code{W} and \code{Y}. The forest uses them
+exactly like the candidate moderators, in its models for \code{Y} and \code{W} and
+in its splits, so each estimated treatment effect describes people with
+the same characteristics, controls included. The results then leave them
+out: they appear in neither the importance ranking nor \code{\link[=effect_by]{effect_by()}},
+whose averages are taken over the controls. (A forest that could not
+split on a control that also moderates the effect would average over it
+with weights that depend on how predictable \code{W} is, unlike the plain
+averages of the report.) With \code{data}, column names; otherwise a numeric
+data frame or matrix with one row per observation.}
 }
 \value{
 A \code{heterogeneity_report}: a list with \code{ate} (the average treatment
