@@ -24,7 +24,8 @@ explore_heterogeneity(
   w = NULL,
   x = NULL,
   treated = NULL,
-  y_one = NULL
+  y_one = NULL,
+  controls = NULL
 )
 }
 \arguments{
@@ -37,7 +38,9 @@ Omit when supplying \code{data}. Linear dependence is allowed.}
 
 \item{ids, weights, clusters}{Optional identifiers, nonnegative weights and
 cluster labels. With \code{data}, supply column names; otherwise supply vectors.
-Clusters affect forest sampling. Weights also apply to displayed means.}
+IDs are copied into the exported table \code{cates}, which also gives each
+row's number. Clusters affect forest sampling (each observation still
+counts once in averages, as in grf). Weights also apply to every average.}
 
 \item{W_hat}{Known expected value of \code{W} given the covariates, as one number
 or one value per original input row; if \code{NULL}, grf estimates it. For two
@@ -58,22 +61,41 @@ preserved.}
 \item{value_labels}{Named list of named character vectors mapping category
 codes to readable labels.}
 
-\item{effect_label}{Axis label with the units of \code{y}. By default "Treatment
-effect on \if{html}{\out{<y>}}" for a binary \code{w} and "Treatment effect on \if{html}{\out{<y>}} per unit of
-\if{html}{\out{<w>}}" for a numeric \code{w}.}
+\item{effect_label}{Axis label of the distribution plot, with the units
+of \code{y}. By default "Treatment effect on \if{html}{\out{<y>}}" for a binary \code{w} and
+"Treatment effect on \if{html}{\out{<y>}} per unit of \if{html}{\out{<w>}}" for a numeric \code{w}. Plots of
+\code{\link[=effect_by]{effect_by()}} label their axis or legend "Treatment effect".}
 
 \item{data}{A data frame. The easiest interface uses \code{data}, \code{y}, \code{w}, \code{x}.}
 
 \item{y, w}{Names of the dependent and independent variable columns in
 \code{data}.}
 
-\item{x}{Character vector of covariate names in \code{data}.}
+\item{x}{Character vector of covariate names in \code{data}: the candidate
+moderators.}
 
 \item{treated}{For a two-valued \code{w}, the value coded 1 and compared against
 the other; by default the larger or alphabetically later.}
 
 \item{y_one}{For a two-valued \code{y}, the value coded 1, so that effects are
 differences in its share; by default the larger or alphabetically later.}
+
+\item{controls}{Characteristics to adjust for that are not candidate
+moderators, such as common causes of \code{W} and \code{Y}. With \code{controls}, the
+forest's models for \code{Y} and \code{W} (its adjustment) use the moderators and
+the controls, with the settings grf uses for its own models, while the
+forest splits only on the moderators, so controls do not appear in the
+importance ranking or \code{\link[=effect_by]{effect_by()}}. This follows grf's
+pattern of estimating \code{Y.hat} and \code{W.hat} with a wider set of covariates
+than the forest uses for heterogeneity. For a numeric \code{W}, the variance of
+\code{W} in the doubly robust scores is estimated from all of them too. Each
+estimated treatment effect then describes people with the same candidate
+moderators, averaged over the controls (weighted, as in grf, by how much
+\code{W} varies among people with the same characteristics). grf notes that
+forests may have a hard time with very few split variables (one to
+three), so keep several candidate moderators where you can. With \code{data},
+column names; otherwise a numeric data frame or matrix with one row per
+observation.}
 }
 \value{
 A \code{heterogeneity_report}: a list with \code{ate} (the average treatment
@@ -81,26 +103,29 @@ effect or average partial effect: \code{estimate} in the units of \code{Y},
 \code{status}, and, for a continuous \code{Y}, \code{standardized}, the estimate in
 standard deviations, with the SDs used, \code{sd_y} and \code{sd_w}; these are \code{NA}
 otherwise),
-\code{cates} (one row per observation: id, its estimated conditional treatment
-effect \code{cate_estimate}, and its treatment effect \code{quintile}),
-\code{moderators} (variable, label, importance, rank), \code{quintiles} (n and
-mean_prediction per quintile), \code{prediction_range} (smallest and largest
-estimated treatment effect), \code{missingness}, preparation \code{notes}, covariate
-\code{labels}, and the data, scores, \code{forest} and \code{settings} (including
-\code{w_type}, \code{"binary"} or \code{"continuous"}) used by the plots. Quintiles have
-about equal row counts; tied estimates stay together, so fewer than five
-groups are possible. Weights apply to all means.
+\code{cates} (the table to export: one row per row of the input, in its
+order, with the \code{row} number, the \code{id} when \code{ids} is supplied, and the
+\code{estimated_treatment_effect}, \code{NA} for rows that were not analysed because
+\code{Y}, \code{W}, the weight or the cluster was missing),
+\code{moderators} (variable, label, importance, rank), \code{prediction_range}
+(lowest and highest estimated treatment effect), \code{missingness} (with each
+characteristic's \code{role}: moderator or control), preparation \code{notes},
+covariate \code{labels}, and the analysed rows' data, \code{estimates} (estimated
+treatment effects) and doubly robust \code{scores}, the \code{forest} and the
+\code{settings} (including \code{controls}, the controls used, and \code{w_type},
+\code{"binary"} or \code{"continuous"}) used by the plots. Weights apply to all
+means.
 }
 \description{
 Supply a data frame and column names, or numeric vectors \code{Y}, \code{W} and
-covariates \code{X}. The dependent variable \code{Y} (the outcome) and the
-independent variable \code{W} (the treatment or comparison) can each be binary,
-with any two values (coded 0/1; \code{y_one} and \code{treated} choose the value
-coded 1), or continuous, a numeric scale. For a binary \code{Y}, effects are
-differences in the share coded 1. A binary \code{W} gives treatment effects as
-\strong{differences} between its two groups; a continuous \code{W} gives them as
-\strong{slopes}: the change in \code{Y} per one-unit increase in \code{W}. The forest estimates a treatment effect for
-each profile of covariates (a conditional average treatment effect); their
+covariates \code{X}. The dependent variable \code{Y} and the independent variable
+\code{W} can each be binary, with any two values (coded 0/1; \code{y_one} and
+\code{treated} choose the value coded 1), or continuous, a numeric scale. For a
+binary \code{Y}, effects are differences in the share coded 1. A binary \code{W}
+gives treatment effects as \strong{differences} between its two groups; a
+continuous \code{W} gives them as \strong{slopes}: the change in \code{Y} per one-unit
+increase in \code{W}. The forest estimates a treatment effect for each
+combination of covariates (a conditional average treatment effect); their
 average is the average treatment effect (for a numeric \code{W}, grf's average
 partial effect). For a continuous \code{Y} it is also given in standard
 deviations: divided by the pooled within-group standard deviation of \code{Y}
@@ -110,38 +135,54 @@ the units of \code{Y}. The characteristics \code{X} are the covariates that
 might moderate the effect. Missing covariates are always handled by grf
 without imputation. There is no minimum sample size, but small samples are
 noted, because their estimates are very noisy. Notes also record data
-preparation, highly correlated covariates (|r| >= 0.9, which share
-importance) and, for two groups, profiles with few comparable observations
-in the other group.
+preparation, covariates with more than half of their values missing, highly
+correlated covariates (|r| >= 0.9, which share importance) and, for two
+groups, observations with few comparable observations in the other group.
 }
 \details{
-Printing the report (type \code{report}) shows a summary and three plots: the
-distribution of estimated treatment effects, candidate moderators ranked by
-importance, and characteristics across treatment effect quintiles (see
-\code{\link[=plot.heterogeneity_report]{plot.heterogeneity_report()}}). \code{\link[=effect_by]{effect_by()}} then estimates the average
-treatment effect within groups of a chosen covariate.
+Printing the report (type \code{report}) shows a summary and two plots: the
+distribution of estimated treatment effects and the candidate moderators
+ranked by importance (see \code{\link[=plot.heterogeneity_report]{plot.heterogeneity_report()}}). For each
+candidate moderator, \code{plot(effect_by(report, "name"))} then shows how the
+treatment effect varies with it, alone or together with a second one.
 
-Overall and group averages use grf's doubly robust scores; the
-distribution and quintiles describe out-of-bag estimates of the conditional
-treatment effects, which include estimation noise.
+Every average (overall, within groups and along a covariate) averages
+grf's doubly robust scores, as grf recommends, rather than the estimated
+treatment effects themselves, which are pulled toward the overall average
+and include estimation noise. The distribution plot and the points of the
+scatter plots show the out-of-bag estimates.
 All results are exploratory. A causal interpretation requires a suitable
 research design, overlap and covariates unaffected by \code{W}; otherwise
 describe adjusted associations.
 }
 \examples{
 set.seed(1)
-d <- data.frame(age = runif(300, 18, 80), group = rbinom(300, 1, .5),
-                hours = runif(300, 0, 10))
+d <- data.frame(
+  age = runif(300, 18, 80),
+  group = rbinom(300, 1, .5),
+  hours = runif(300, 0, 10)
+)
 d$score <- d$group * (1 + (d$age > 50)) + rnorm(300)
-report <- explore_heterogeneity(data = d, y = "score", w = "group",
-                                x = "age", W_hat = .5, num_trees = 200)
-report                 # summary and three plots
-effect_by(report, "age")
+report <- explore_heterogeneity(
+  data = d,
+  y = "score",
+  w = "group",
+  x = "age",
+  W_hat = .5,
+  num_trees = 200
+)
+report # summary and two plots
+plot(effect_by(report, "age"))
 
 # A numeric W gives slopes: change in score per extra hour
 d$score2 <- d$hours * (0.2 + 0.3 * (d$age > 50)) + rnorm(300)
-slopes <- explore_heterogeneity(data = d, y = "score2", w = "hours",
-                                x = "age", num_trees = 200)
+slopes <- explore_heterogeneity(
+  data = d,
+  y = "score2",
+  w = "hours",
+  x = "age",
+  num_trees = 200
+)
 print(slopes, plots = FALSE)
 }
 \references{

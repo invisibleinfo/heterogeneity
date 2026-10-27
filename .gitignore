@@ -8,43 +8,15 @@
 .Ruserdata
 .Rprofile
 .Rproj.user/
-
-# Environment files
 .Renviron
 
-# Dependencies / package management
-renv/library/
-renv/staging/
-packrat/lib/
-packrat/src/
-
-# Python / notebooks (if any)
-.ipynb_checkpoints/
-
-# Knitr / R Markdown build artifacts
-*_cache/
-cache/
+# Renders, builds and checks
 *.utf8.md
 *.knit.md
-*.nb.html
-*.tex
-*.log
-*.aux
-*.toc
-*.out
-*.bbl
-*.blg
-*.bcf
-*.run.xml
-*.synctex.gz
-*-concordance.tex
 Rplots.pdf
-
-# Package checks
 *.Rcheck/
 *.tar.gz
 
 # Misc
 .vscode/
-.idea/
 paper/

@@ -4,23 +4,15 @@
 \alias{plot.heterogeneity_report}
 \title{Plot a heterogeneity report}
 \usage{
-\method{plot}{heterogeneity_report}(
-  x,
-  type = c("distribution", "importance", "profiles"),
-  top_n = NULL,
-  variables = NULL,
-  ...
-)
+\method{plot}{heterogeneity_report}(x, type = c("distribution", "importance"), top_n = NULL, ...)
 }
 \arguments{
 \item{x}{A report from \code{\link[=explore_heterogeneity]{explore_heterogeneity()}}.}
 
-\item{type}{\code{"distribution"}, \code{"importance"} or \code{"profiles"}.}
+\item{type}{\code{"distribution"} or \code{"importance"}.}
 
-\item{top_n}{Number of covariates for \code{"importance"} and \code{"profiles"},
-taken from the importance ranking (default: all).}
-
-\item{variables}{Covariates to show in \code{"profiles"}, instead of \code{top_n}.}
+\item{top_n}{Number of covariates for \code{"importance"}, taken from the
+importance ranking (default: all).}
 
 \item{...}{Ignored.}
 }
@@ -28,13 +20,14 @@ taken from the importance ranking (default: all).}
 A ggplot object.
 }
 \description{
-Three views of the fitted forest:
+Two views of the fitted forest:
 \itemize{
 \item \code{"distribution"} (default): histogram of the estimated treatment
 effects conditional on covariates (out-of-bag estimates of the
-conditional average treatment effect), coloured like the heatmaps: increasingly red
-further below 0 and increasingly teal further above it, with equal
-distances from 0 equally deep; 0 is always a bin edge. The number of
+conditional average treatment effect), increasingly red further below 0
+and increasingly teal further above it, with equal distances from 0
+equally deep; a dashed line marks 0, which is always a bin edge, and a
+solid, labelled line marks the average treatment effect. The number of
 bins follows the Freedman-Diaconis rule. The spread includes estimation
 noise.
 \item \code{"importance"}: all covariates, as candidate moderators, ranked by how
@@ -42,29 +35,28 @@ much the forest split on them, weighted toward early splits; category
 indicators are added back to their covariate. Importance gives neither
 the size nor the direction of a treatment effect, and related covariates
 share it.
-\item \code{"profiles"}: for every covariate in order of importance (one row per
-category of a text covariate, as a share), its average in each treatment
-effect quintile, labelled from the bottom 20\% of estimated treatment
-effects to the top 20\% (with many tied estimates, fewer groups, labelled
-by their actual shares). Row labels give each covariate's observed range.
-Colours compare each average with the covariate's overall average, teal
-above and red below, measured in standard deviations of that covariate,
-so covariates in different units share one colour scale. Missing values
-are ignored.
 }
 }
 \details{
-Supplied weights apply to bar heights and means. For estimates within
-groups of a chosen covariate, use \code{\link[=effect_by]{effect_by()}} and plot its result.
+Supplied weights apply to bar heights. To see how the treatment effect
+varies with one or two covariates, plot the result of \code{\link[=effect_by]{effect_by()}}.
 }
 \examples{
 set.seed(1)
-d <- data.frame(age = runif(300, 18, 80), educ = sample(8:20, 300, TRUE),
-                group = rbinom(300, 1, .5))
+d <- data.frame(
+  age = runif(300, 18, 80),
+  educ = sample(8:20, 300, TRUE),
+  group = rbinom(300, 1, .5)
+)
 d$score <- d$group * (1 + (d$age > 50)) + rnorm(300)
-report <- explore_heterogeneity(data = d, y = "score", w = "group",
-                                x = c("age", "educ"), W_hat = .5, num_trees = 200)
+report <- explore_heterogeneity(
+  data = d,
+  y = "score",
+  w = "group",
+  x = c("age", "educ"),
+  W_hat = .5,
+  num_trees = 200
+)
 plot(report)
 plot(report, "importance")
-plot(report, "profiles")
 }

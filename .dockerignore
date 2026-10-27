@@ -1,9 +1,0 @@
-# Only the package itself goes into the app's container.
-.git
-.DS_Store
-paper
-tutorial
-tests
-tools
-*.Rcheck
-*.tar.gz

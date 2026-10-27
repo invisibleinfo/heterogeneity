@@ -8,9 +8,10 @@
 \description{
 \code{\link[=explore_heterogeneity]{explore_heterogeneity()}} fits one causal forest and returns a report;
 print it for a summary and \link[=plot.heterogeneity_report]{plot()} it for the
-spread of predictions, covariate importance and profiles. \code{\link[=effect_by]{effect_by()}}
-estimates the average effect within groups of one or two covariates, and
-its result can be plotted too. \code{\link[=run_app]{run_app()}} opens a point-and-click version.
+spread of estimated treatment effects and covariate importance.
+\code{\link[=effect_by]{effect_by()}} shows how the treatment effect varies with one or two
+covariates, as a table and as a plot. \code{\link[=run_app]{run_app()}} opens a
+point-and-click version.
 }
 \seealso{
 Useful links:

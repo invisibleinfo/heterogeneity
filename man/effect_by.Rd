@@ -22,7 +22,8 @@ effect_by(
 one covariate, 3 for two).}
 
 \item{max_levels}{Numeric covariates with at most this many observed values
-are grouped by value (default 8). Text categories keep their levels.}
+are grouped by value (default 8), and their plot is labelled by category
+with a wider loess line. Text categories keep their levels.}
 
 \item{min_n}{Minimum number of observations (with positive weight) for a
 group to be estimated (default 30). Both groups of \code{W} must be present
@@ -37,26 +38,39 @@ rows in each), \code{estimate} and \code{status} (why an estimate is missing, or
 }
 \description{
 Groups are formed from one or two of the report's covariates. Numeric
-covariates with many values are cut into quantile bins (ties can reduce
-the number of bins); missing values form their own "(Missing)" group in the
-table. Each estimate is the average treatment effect within the group: an
-average of grf's doubly robust scores, using any supplied weights, without
-refitting the forest. For a binary \code{W} it is a difference between the two
-groups of \code{W}; for a numeric \code{W}, a slope (change in \code{Y} per one-unit
-increase in \code{W}). Groups
-contain different people, so a pattern does not show what would happen if
-the covariate changed.
+covariates with more than \code{max_levels} values are cut, each on its own,
+into \code{bins} groups at its quantiles (ties stay together, so groups can be
+unequal or fewer); other covariates are grouped by value, and missing
+values form their own "(Missing)" group in the table. Each estimate is the
+average treatment effect within the group: an average of grf's doubly
+robust scores, using any supplied weights, without refitting the forest.
+This equals grf's \code{average_treatment_effect(forest, subset = )}, which is
+valid because the groups are defined by covariates alone. For a binary \code{W}
+it is a difference between the two groups of \code{W}; for a numeric \code{W}, a
+slope (change in \code{Y} per one-unit increase in \code{W}). Groups contain
+different people, so a pattern does not show what would happen if the
+covariate changed.
 }
 \details{
-Pass the result to \link[=plot.heterogeneity_groups]{plot()}: one covariate gives
-a dot plot, two give a heatmap (without the missing-value groups).
+Pass the result to \link[=plot.heterogeneity_groups]{plot()}. One numeric
+covariate gives a scatter plot of each row's estimated treatment effect
+against its value, with a line for the average treatment effect along it (a
+loess smooth of the doubly robust scores), so its trend is visible even with
+few values; a text covariate gives a dot plot of the group estimates, and
+two covariates give a heatmap. The plots leave out missing values.
 }
 \examples{
 set.seed(1)
 d <- data.frame(age = runif(300, 18, 80), group = rbinom(300, 1, .5))
 d$score <- d$group * (1 + (d$age > 50)) + rnorm(300)
-report <- explore_heterogeneity(data = d, y = "score", w = "group",
-                                x = "age", W_hat = .5, num_trees = 200)
+report <- explore_heterogeneity(
+  data = d,
+  y = "score",
+  w = "group",
+  x = "age",
+  W_hat = .5,
+  num_trees = 200
+)
 groups <- effect_by(report, "age")
 groups
 plot(groups)

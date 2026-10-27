@@ -4,50 +4,50 @@
 \alias{load_gss2024}
 \title{Load the GSS 2024 example data}
 \source{
-NORC, \href{https://gss.norc.org/get-the-data.html}{General Social Survey},
-via \href{https://kjhealy.github.io/gssr/}{gssr}. Install gssr with
-\code{install.packages("gssr", repos = c("https://kjhealy.r-universe.dev", "https://cloud.r-project.org"))}.
+NORC at the University of Chicago, \href{https://gss.norc.org/get-the-data.html}{General Social Survey 2024}, prepared with
+\href{https://kjhealy.github.io/gssr/}{gssr}. Cite the GSS when you use these
+data.
 }
 \usage{
-load_gss2024(raw = NULL, refresh = FALSE)
-}
-\arguments{
-\item{raw}{Optional: the data frame returned by \code{gssr::gss_get_yr(2024)},
-to avoid downloading again.}
-
-\item{refresh}{Download again even if the data were loaded in this session.}
+load_gss2024()
 }
 \value{
 A list with \code{data} (one row per respondent: \code{id}, the dependent
 variable \code{rating_trump}, the independent variable \code{conservative}, the
-characteristics, and the optional \code{svy_weight} and \code{psu_cluster}), \code{covariates} (names of the characteristics), \code{labels}
-(short readable names), \code{value_labels} (category names for coded items),
-\code{codebook} (variable, label, coding and source GSS item) and
-\code{effect_label} (an axis label with units).
+characteristics, the further dependent and independent variables, and the
+optional \code{svy_weight} and \code{psu_cluster}), \code{covariates} (names of the
+characteristics), \code{labels} (short readable names), \code{value_labels}
+(category names for coded items), \code{codebook} (variable, label, role,
+coding, GSS source item and label, notes, and \code{same_as}: columns that
+measure the same thing) and \code{effect_label} (an axis label with units).
 }
 \description{
-Downloads the 2024 General Social Survey with the \pkg{gssr} package and
-prepares the teaching example used in the tutorial and the app:
-a 0-100 rating of Donald Trump (\code{rating_trump}), conservative
-self-identification (\code{conservative}: 1 = slightly to extremely
-conservative, 0 = liberal or moderate) and demographic, socioeconomic,
-religious, attitudinal and wellbeing characteristics. Nothing is stored in
-the package; the download is kept in memory for the R session.
+Reads the teaching example used in the tutorial and the app, which ships
+with the package as \code{gss_demo.csv} and \code{gss_demo_codebook.csv} (in
+\code{system.file("extdata", package = "heterogeneity")}), so no download is
+needed. It holds 3,721 respondents to the 2024 General Social Survey
+(NORC's Release 2, including the AmeriSpeak oversample of Black, Hispanic,
+and Asian American, Native Hawaiian and Pacific Islander respondents) with a
+value for both the 0-100 rating of Donald Trump (\code{rating_trump}) and
+conservative self-identification (\code{conservative}: 1 = slightly to extremely
+conservative, 0 = liberal or moderate), and 39 demographic, socioeconomic,
+religious, attitudinal and wellbeing characteristics. For other analyses it
+also holds further dependent variables (ratings of Kamala Harris, Joe Biden,
+the Democratic and Republican parties and MAGA Republicans, the rating of
+the economy and the preferred immigration level) and a further independent
+variable (a college degree). Missing values stay missing (the forest
+handles them). Unweighted results describe these respondents; the optional
+\code{svy_weight} describes U.S. adults.
 }
 \details{
-Every recode is defined by the meaning of the GSS category labels, not by
-assumed codes, and the labels are checked: if a later GSS release changes a
-category, loading stops and names the item. Codes labelled as missing
-(don't know, no answer, skipped and so on) become \code{NA}. Missing
-characteristics stay missing (the forest handles them); only respondents
-missing the rating or political views are left out. Rerun the analysis after
-a new GSS release, as the numbers can change.
+The files are built from NORC's release by \code{data-raw/gss_demo.R} in the
+package's repository, which defines every recode by the meaning of the GSS
+category labels and checks them, so a changed category stops the build.
+The codebook gives each column's coding, its GSS source item and notes,
+such as who was not asked a question.
 }
 \examples{
-\donttest{
-if (requireNamespace("gssr", quietly = TRUE)) {
-  gss <- load_gss2024()
-  head(gss$codebook)
-}
-}
+gss <- load_gss2024()
+dim(gss$data)
+gss$codebook[1:5, c("variable", "label", "coding")]
 }

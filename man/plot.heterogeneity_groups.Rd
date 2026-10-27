@@ -15,10 +15,22 @@
 A ggplot object.
 }
 \description{
-One covariate gives a dot plot of the group estimates; the axis shows each
-group's row count. Two covariates give a heatmap coloured around the overall
-average. Both leave out the missing-value groups, which the table keeps.
-Groups that were not estimated (too few observations, or only one group of
-a binary \code{W}, or no spread in a numeric \code{W}) are marked; the
-table from \code{\link[=effect_by]{effect_by()}} gives the reason.
+One numeric covariate gives a scatter plot: each row's estimated treatment
+effect against the covariate's value (where values repeat, points are spread
+slightly sideways), with a line for the average treatment effect along the
+covariate. The line is a loess smooth of grf's doubly robust scores, the
+scores behind every average, weighted when weights were supplied: with span
+0.75 and degree 2, as in \code{geom_smooth()}, or, for a covariate with at most
+\code{max_levels} values (see \code{\link[=effect_by]{effect_by()}}), a wider local-linear smooth (span 2,
+degree 1), which the default cannot fit reliably on so few values; such
+covariates are labelled by their categories. The estimates themselves are
+pulled toward the overall average, so the line can rise and fall more than
+the points. A text covariate gives a dot plot of the group estimates, since
+its categories have no order; the axis shows each group's row count. Both
+have a dashed line at 0. Two covariates give a heatmap coloured around the
+overall average. Captions give the average treatment effect. All three leave
+out missing values, which the table keeps as a group. In the dot plot and
+heatmap, groups that were not estimated (too few observations, or only one
+group of a binary \code{W}, or no spread in a numeric \code{W}) are marked; the table
+from \code{\link[=effect_by]{effect_by()}} gives the reason.
 }

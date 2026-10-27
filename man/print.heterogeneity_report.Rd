@@ -11,7 +11,7 @@
 
 \item{digits}{Decimal places for estimates.}
 
-\item{plots}{Draw the three plots after the summary (default \code{TRUE}).}
+\item{plots}{Draw the two plots after the summary (default \code{TRUE}).}
 
 \item{...}{Ignored.}
 }
@@ -21,8 +21,9 @@
 \description{
 Shows the summary (the average treatment effect, or for a numeric \code{W} the
 average partial effect, also in standard deviations for a continuous
-outcome; the range of estimated treatment effects; the candidate
+dependent variable; the range of estimated treatment effects; the candidate
 moderators most used in tree splits, and notes on the data) and, by default,
-the three plots of \code{\link[=plot.heterogeneity_report]{plot.heterogeneity_report()}}: the distribution of
-estimated treatment effects, importance, and treatment effect quintiles.
+the two plots of \code{\link[=plot.heterogeneity_report]{plot.heterogeneity_report()}}: the distribution of
+estimated treatment effects and the candidate moderators ranked by
+importance.
 }
