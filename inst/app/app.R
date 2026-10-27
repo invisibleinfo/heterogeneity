@@ -2289,7 +2289,7 @@ server <- function(input, output, session) {
     est <- t[is.finite(t$estimate) & !info$missing, ]
     if (nrow(est) < 2) {
       return(paste0(
-        "Too few groups could be estimated to compare (each needs at least 30 observations, ",
+        "Too few groups could be estimated to compare (each needs at least 10 observations, ",
         if (f$continuous) "in which W varies" else "including both groups of W",
         ")."
       ))
@@ -2335,7 +2335,7 @@ server <- function(input, output, session) {
       "categories rather than each category's own average. The points are pulled toward the overall average, so the line can rise ",
       "and fall more than they do; it is least certain where few people have a value.</p>",
       "<p>For a text characteristic, whose categories have no order, each point is the average treatment effect in one group, ",
-      "with its number of people (n). Groups with fewer than 30 people, ",
+      "with its number of people (n). Groups with fewer than 10 people, ",
       if (f$continuous) {
         "or in which W does not vary"
       } else {

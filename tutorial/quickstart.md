@@ -91,7 +91,7 @@ before fitting, and the report’s notes list every change:
   as region codes) into text first;
 - the notes also flag characteristics with more than half of their
   values missing, pairs of characteristics correlated at \|r\| ≥ 0.9
-  (which share importance), and groups of W with fewer than 30 rows
+  (which share importance), and groups of W with fewer than 10 rows
   (whose estimates are very noisy).
 
 **Keep missing characteristics.** The forest handles missing values
@@ -264,7 +264,7 @@ voting
 Each row is a group of respondents, labelled by its code (the codebook
 above gives the meaning). `n_control` counts the liberal/moderate
 respondents in the group and `n_treated` the conservative ones. A group
-with fewer than 30 respondents, or with only one group of W, gets no
+with fewer than 10 respondents, or with only one group of W, gets no
 estimate, and its `status` says why. The average treatment effect is 1.0
 points among respondents who are not at all likely to vote and 42.0
 among those who are extremely likely. The table includes respondents
@@ -335,9 +335,9 @@ amounts, splits into 1 - 18 (1,309 respondents), 19 - 22 (1,157
 respondents), 23 - 26 (908 respondents). Each cell shows an average
 treatment effect and its number of respondents, coloured around the
 overall average treatment effect, as the legend’s “Treatment effect”
-scale shows. Grey cells have too few respondents, or only one group of
-W, to be estimated. The heatmap leaves out respondents missing either
-characteristic; the table from
+scale shows. A cell with too few respondents, or with only one group of
+W, is not estimated and appears grey. The heatmap leaves out respondents
+missing either characteristic; the table from
 `effect_by(report, "lkelyvot", "income16")` includes them.
 
 ## 4. Export results

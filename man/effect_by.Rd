@@ -10,7 +10,7 @@ effect_by(
   x2 = NULL,
   bins = if (is.null(x2)) 5 else 3,
   max_levels = 8,
-  min_n = 30
+  min_n = 10
 )
 }
 \arguments{
@@ -26,7 +26,7 @@ are grouped by value (default 8), and their plot is labelled by category
 with a wider loess line. Text categories keep their levels.}
 
 \item{min_n}{Minimum number of observations (with positive weight) for a
-group to be estimated (default 30). Both groups of \code{W} must be present
+group to be estimated (default 10). Both groups of \code{W} must be present
 (for a numeric \code{W}: more than one value).}
 }
 \value{

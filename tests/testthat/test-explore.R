@@ -289,11 +289,11 @@ test_that("small and unsupported subgroups have clear statuses and truthful coun
   expect_true(is.na(tab$estimate[tab$z == "1"]))
   expect_match(tab$status[tab$z == "1"], "one group of W")
   expect_equal(tab$n_control[tab$z == "1"], 0)
-  r$weights[1:180] <- 0
+  r$weights[1:195] <- 0
   tab <- effect_by(r, "z")
   expect_equal(tab$n[1], 200)
-  expect_equal(tab$n_positive[1], 20)
-  expect_match(tab$status[1], "fewer than 30")
+  expect_equal(tab$n_positive[1], 5)
+  expect_match(tab$status[1], "fewer than 10")
   r <- report
   r$scores[1] <- Inf
   expect_match(
@@ -699,13 +699,17 @@ test_that("small samples run with a note instead of a minimum size", {
     fixed = TRUE
   )))
   slopes <- explore_heterogeneity(
-    data = transform(d, w = seq_len(12)),
+    data = transform(d[1:8, ], w = seq_len(8)),
     y = "y",
     w = "w",
     x = "age",
     num_trees = 100
   )
-  expect_true(any(grepl("Only 12 rows are used", slopes$notes)))
+  expect_true(any(grepl(
+    "Only 8 rows are used. With fewer than 10, estimates are very noisy.",
+    slopes$notes,
+    fixed = TRUE
+  )))
   expect_false(any(grepl("Only", report$notes)))
   expect_error(
     explore_heterogeneity(

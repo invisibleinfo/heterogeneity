@@ -433,7 +433,7 @@ prepare_inputs <- function(
       "'."
     )
   }
-  small <- 30
+  small <- 10
   if (w_type == "binary") {
     sizes <- c(sum(d[[w]][positive] == 0), sum(d[[w]][positive] == 1))
     few <- sizes < small

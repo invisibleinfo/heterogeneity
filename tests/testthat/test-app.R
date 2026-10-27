@@ -197,17 +197,20 @@ test_that("an upload runs in one step, shows every result, keeps missing values 
     )) {
       expect_match(help_text, phrase, fixed = TRUE)
     }
-    # A second characteristic turns a plot into a heatmap; here its nine cells
-    # are too small to estimate, and clearing it restores the groups.
+    # A second characteristic turns a plot into a heatmap, whose cells (about
+    # 22 rows each) are compared; clearing it restores the groups.
     do.call(
       session$setInputs,
       stats::setNames(list("age"), paste0("second_", region))
     )
-    expect_match(
-      output[[paste0("effect_text_", region)]]$html,
-      "Too few groups could be estimated"
-    )
+    expect_match(output[[paste0("effect_text_", region)]]$html, "lowest for")
     expect_type(output[[paste0("effect_", region)]], "list")
+    # Groups too small to estimate are not compared.
+    expect_match(
+      effect_short(effect_by(r, "region", "age", min_n = 100)),
+      "Too few groups could be estimated to compare (each needs at least 10 observations",
+      fixed = TRUE
+    )
     do.call(
       session$setInputs,
       stats::setNames(list(""), paste0("second_", region))

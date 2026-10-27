@@ -29,7 +29,7 @@
 #'   are grouped by value (default 8), and their plot is labelled by category
 #'   with a wider loess line. Text categories keep their levels.
 #' @param min_n Minimum number of observations (with positive weight) for a
-#'   group to be estimated (default 30). Both groups of `W` must be present
+#'   group to be estimated (default 10). Both groups of `W` must be present
 #'   (for a numeric `W`: more than one value).
 #' @return A data frame (class `heterogeneity_groups`) with one row per group:
 #'   the group columns, `n` (rows), `n_positive` (rows with positive weight),
@@ -58,7 +58,7 @@ effect_by <- function(
   x2 = NULL,
   bins = if (is.null(x2)) 5 else 3,
   max_levels = 8,
-  min_n = 30
+  min_n = 10
 ) {
   if (!inherits(report, "heterogeneity_report")) {
     stop("report must come from explore_heterogeneity().")
