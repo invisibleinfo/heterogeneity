@@ -1,0 +1,342 @@
+---
+title: "Replication with Causual Forest: 23 US Youth Risk Data Analysis"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE, 
+  echo = TRUE        
+)
+```
+
+# Step 1: Simply try to replicate the result in the original paper
+
+## Summary of the Discrepancy
+
+1.  **Physical activity days:** the authors claim that it was measured by **"**measured by the number of days per week the adolescent was physically active...", however, they reported that the maximum is 4, which should be 7
+2.  **Numbers of row** (N = 10315) in `df_conf` does not fully matched with the original sample size (N = 10334).
+3.  **Parental monitoring** was not reverse-coded even though they said so in the method section.
+4.  Their results for model 2 (male \* media use) are inconsistent between their table and their main texts.
+5.  The logistic regression results are basically replicated. The small differences are likely due to reasons mentioned above.
+
+## Data Loading and Cleaning
+
+```{r lib, include=FALSE}
+library(haven)
+library(tidyverse)
+library(skimr)
+library(scales)
+df <- read_sav("yrbs2023.sav")
+```
+
+```{r}
+# 1. Pre-process target variables (needs closer look based on 'Data cleaning pipeline for causal forest analysis' in heterogeneity draft rmd)
+df <- df |>
+  mutate(
+    # 1.0 Generate sequential 5-digit string ID
+    id = sprintf("%05d", row_number()),
+    
+    # 1.1 Recode Q2 (Sex: 1 = Female, 2 = Male) -> (0 = Female, 1 = Male)
+    Q2 = as.numeric(Q2) - 1,
+    
+    # 1.3 Recode Q26 (Depressive symptoms: 1 = Yes, 2 = No) -> (1 = Yes, 0 = No)
+    Q26 = case_match(
+      as.numeric(Q26), 
+      1 ~ 1, 
+      2 ~ 0, 
+      .default = NA_real_
+    ),
+    
+    # 1.4 Recode Q80 into 3-level categorical/ordered variable:
+    # 0 = Low (categories 1-3: non-use to about once a week)
+    # 1 = Moderate (categories 4-5: a few times a week to about once a day)
+    # 2 = High (categories 6-8: several times a day or more)
+    Q80 = case_match(
+      as.numeric(Q80),
+      1:3 ~ 1,
+      4:5 ~ 2,
+      6:8 ~ 3,
+      .default = NA_real_
+    ),
+    
+    # 1.5 Convert Q1 (Age categories) into continuous approximate age in years:
+    # Cat 1 (<= 12) -> 12, Cat 2 (13) -> 13, ..., Cat 7 (>= 18) -> 18
+    # Mathematical shortcut: as.numeric(Q1) + 11 maps 1:7 to 12:18
+    Q1 = case_match(
+      as.numeric(Q1),
+      1:7 ~ as.numeric(Q1) + 11,
+      .default = NA_real_
+    ),
+    
+    # 1.6 Recode Q25 (Electronic bullying: 1 = Yes, 2 = No) -> (1 = Yes, 0 = No)
+    Q25 = case_match(
+      as.numeric(Q25),
+      1 ~ 1,
+      2 ~ 0,
+      .default = NA_real_
+    ),
+    
+    # 1.7 Convert Q76 (Physical activity: 1 = 0 days, 2 = 1 day, ..., 8 = 7 days) -> number of days (0 to 7)
+    # Mathematical shortcut: as.numeric(Q76) - 1 maps 1:8 to 0:7
+    Q76 = case_match(
+      as.numeric(Q76),
+      1:8 ~ as.numeric(Q76) - 1,
+      .default = NA_real_
+    ),
+    # 1.8 Reverse-code School Connectedness (1-5 -> 5-1)
+    Q103 = 6 - as.numeric(Q103)
+  )
+ 
+# 2. Confirm Variables
+confirm_cols <- c(
+  id                   = "id",
+  depressive_symptoms  = "Q26",  # DV: depressive symptoms
+  social_media_use     = "Q80",  # IV: social media use
+  parental_monitoring  = "Q104", # Moderator: parental monitoring (oversight)
+  male                 = "Q2",   # Moderator: sex (0 = Female, 1 = Male)
+  age                  = "Q1",   # Control: age
+  electronic_bullying  = "Q25",  # Control: electronic bullying
+  physical_activity    = "Q76",  # Control: physical activity
+  school_connectedness = "Q103"  # Control: school connectedness
+)
+
+# 3. Explore Variables
+explore_cols <- c(
+  race_ethnicity       = "Q5",   # Race / ethnicity
+  sexual_orientation   = "Q64",  # Sexual orientation
+  alcohol_use_30d      = "Q42",  # Alcohol use (past 30 days)
+  parent_emotion_abuse = "Q89",  # Parental emotional abuse
+  parent_phys_abuse    = "Q90",  # Parental physical abuse
+  adult_meet_needs     = "Q99"   # Adults meeting basic needs
+)
+
+# 4. Merge column definitions
+final_cols <- c(confirm_cols, explore_cols)
+
+# 5. Extract subsets
+df_conf <- df |> 
+  select(all_of(confirm_cols))
+
+df_exp <- df |> 
+  select(all_of(final_cols))
+```
+
+## Quick Overview
+
+```{r}
+df_exp |> count(depressive_symptoms)
+```
+
+```{r}
+skim(df_conf)
+```
+
+## Missing Values
+
+Note: The original author handled missing values by listwise deletion (see argument in their paper)
+
+```{r}
+# 1. Check original sample size
+nrow(df)
+
+# 2. Listwise deletion for df_confirm and check sample size
+df_conf <- df_conf |> drop_na()
+nrow(df_conf)
+
+# 3. Listwise deletion for df_explore and check sample size
+df_exp <- df_exp |> drop_na()
+nrow(df_exp)
+```
+
+## Replication Results
+
+original paper: <https://doi.org/10.1007/s11469-025-01566-3>
+
+1.  number of cases: Numbers of row (N = 10315) in `df_conf` [***does not fully matched***]{.underline} with the original sample size (N = 10334).
+2.  try to replicate the descriptive analysis: only `physical activity` is different
+
+```{r}
+options(digits = 2)
+skim(df_conf)
+```
+
+```{r}
+df_conf %>%
+  count(social_media_use) %>%
+  mutate(
+    level = case_match(social_media_use, 1 ~ "Low", 2 ~ "Moderate", 3 ~ "High"),
+    percent = percent(n / sum(n), accuracy = 0.1)
+  )
+```
+
+[**Except for the physical activity days**]{.underline}, the rest of the results were replicated.
+
+![](images/Screenshot%202026-10-30%20at%2019.57.59.png)
+
+"Physical activity was included as a protective behavioral factor, measured by the number of days per week the adolescent was physically active for at least 60 min", and the corresponding result from the original Youth Risk dataset codebook. **Hence, it's likely that the authors had some mistake since their max number is 4 instead of 7.**
+
+![](images/Screenshot%202026-10-30%20at%2019.59.50.png)
+
+3.  try to replicate the logistic regression results
+
+```{r replication-models, message=FALSE, warning=FALSE}
+library(dplyr)
+library(knitr)
+
+# 1. Prepare data: low social media use as the reference level
+df_model <- df_conf %>%
+  mutate(
+    social_media_use = factor(
+      social_media_use, 
+      levels = c(1, 2, 3), 
+      labels = c("Low", "Moderate", "High")
+    )
+  )
+
+# Fast Wald OR and 95% CI extractor (avoids profile likelihood hang)
+format_or <- function(model, target_terms = NULL) {
+  cf  <- coef(model)
+  se  <- sqrt(diag(vcov(model)))
+  pv  <- 2 * (1 - pnorm(abs(cf / se)))
+  
+  or  <- exp(cf)
+  low <- exp(cf - 1.96 * se)
+  upp <- exp(cf + 1.96 * se)
+  
+  res <- data.frame(
+    Variable = names(cf),
+    OR = sprintf("%.2f", or),
+    `95% CI` = sprintf("[%.2f, %.2f]", low, upp),
+    `p-value` = ifelse(pv < 0.001, "< .001", sprintf("%.3f", pv)),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+  
+  if (!is.null(target_terms)) {
+    res <- res %>% filter(Variable %in% target_terms)
+  }
+  return(res)
+}
+
+# ==========================================
+# Model 1: Baseline Main Effects
+# ==========================================
+m1 <- glm(
+  depressive_symptoms ~ social_media_use + male + age + 
+    electronic_bullying + physical_activity + school_connectedness + parental_monitoring,
+  data = df_model,
+  family = binomial()
+)
+
+# ==========================================
+# Model 2: Moderation by Gender
+# ==========================================
+m2 <- glm(
+  depressive_symptoms ~ social_media_use * male + age + 
+    electronic_bullying + physical_activity + school_connectedness + parental_monitoring,
+  data = df_model,
+  family = binomial()
+)
+
+# ==========================================
+# Model 3: Moderation by Parental Monitoring
+# ==========================================
+m3 <- glm(
+  depressive_symptoms ~ social_media_use * parental_monitoring + male + age + 
+    electronic_bullying + physical_activity + school_connectedness,
+  data = df_model,
+  family = binomial()
+)
+```
+
+### Table 1: Model 1 Baseline Results (Replication)
+
+results were generally replicated: Originally, adolescents who reported moderate use had 1.31 times greater odds of depressive symptoms (95% CI [1.07, 1.60], *p* \<.01), while those with high use had 1.77 times greater odds (95% CI [1.52, 2.08], *p* \<.001).
+
+```{r table-m1, echo=FALSE}
+kable(format_or(m1), 
+      caption = "Model 1: Baseline Logistic Regression Predictors of Depressive Symptoms",
+      align = c("l", "c", "c", "c"))
+```
+
+### Table 2: Model 2 Gender Moderation (Replication):
+
+results were mostly replicated: originally, in their table:
+
+-   Moderate SM×male — 0.99 [0.66, 1.49];
+
+-   High SM×male — 0.86 [0.63, 1.18]
+
+But, inconsistently, in their maintext: Contrary to our hypothesis, these interaction terms were not statistically significant (moderate use × gender: OR = 1.12, 95% CI [0.88, 1.43], p =.36; high use × gender: OR = 0.94, 95% CI [0.78, 1.14], p =.53).
+
+Though the conclusion remain the same, as they are all insignificant.
+
+```{r table-m2, echo=FALSE}
+kable(
+  format_or(m2, c(
+    "social_media_useModerate:male", 
+    "social_media_useHigh:male"
+  )),
+  caption = "Model 2: Moderation Effect of Gender (SM x Male)",
+  align = c("l", "c", "c", "c")
+)
+```
+
+### Table 3: Model 3 Parental Monitoring Moderation (Replication)
+
+results were generally replicated: the interaction between moderate social media use and parental monitoring was significant (OR = 0.80, 95% CI [0.68, 0.95], *p* \<.05), as was the interaction between high use and parental monitoring (OR = 0.87, 95% CI [0.77, 0.98], *p* \<.05).
+
+```{r table-m3, echo=FALSE}
+kable(
+  format_or(m3, c(
+    "social_media_useModerate:parental_monitoring", 
+    "social_media_useHigh:parental_monitoring"
+  )),
+  caption = "Model 3: Moderation Effect of Parental Monitoring (SM x Monitoring)",
+  align = c("l", "c", "c", "c")
+)
+```
+
+# Step 2: Replication with causal forests
+
+We first export the data which can mostly replicate their results (descriptive analysis and logistic regression)
+
+```{r}
+write_csv(df_conf,'df_conf.csv')
+```
+
+Then, we import this data to the heterogeneity app to see if it give similar conclusion.
+
+```{r, eval=FALSE, echo=TRUE}
+# Install heterogeneity package in R
+
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+remotes::install_github("invisibleinfo/heterogeneity")
+
+heterogeneity::run_app()
+```
+
+**originally, in the paper**:
+
+1.  higher levels of parental monitoring buffer [social media use —+—\> depression]
+2.  gender does not significantly moderate
+
+**from heterogeneity application** :
+
+1.  the importance seems to be consistent with the original results
+
+![](images/Screenshot%202026-11-02%20at%2002.32.05.png)
+
+2.  the direction seems to be [***inconsistent***]{.underline}
+
+    as in the original paper, low parental monitoring has stronger effect from social media to depression;
+
+    however, from causal forest, the effect is hightest for high parental monitoring.
+
+![](images/Screenshot%202026-11-02%20at%2002.30.25.png)
